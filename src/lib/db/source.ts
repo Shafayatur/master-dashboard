@@ -1,6 +1,6 @@
 import 'server-only';
 import { Pool, type QueryResultRow } from 'pg';
-import { getEnv } from '../env';
+import { getSourceEnv } from '../env';
 import { assertReadOnlySql } from '../sql/guard';
 import { buildPoolConfig } from './pool-config';
 
@@ -9,11 +9,11 @@ const g = globalThis as unknown as { __sourcePool?: Pool };
 /** Singleton pool (survives hot reload and is reused across warm serverless invocations). */
 export function sourcePool(): Pool {
   if (!g.__sourcePool) {
-    const env = getEnv();
+    const env = getSourceEnv();
     const pool = new Pool(
-      buildPoolConfig(env.SOURCE_DATABASE_URL, {
-        ssl: env.SOURCE_DB_SSL === 'require' ? { rejectUnauthorized: env.SOURCE_DB_SSL_REJECT_UNAUTHORIZED } : false,
-        max: env.SOURCE_DB_POOL_MAX,
+      buildPoolConfig(env.url, {
+        ssl: env.ssl === 'require' ? { rejectUnauthorized: env.sslRejectUnauthorized } : false,
+        max: env.poolMax,
         appName: 'master-dashboard',
       }),
     );

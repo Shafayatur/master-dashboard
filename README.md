@@ -25,7 +25,7 @@ npm run dev                  # http://localhost:3000
 | `npm run db:migrate` | Applies `db/config/*.sql` to the Neon config DB |
 
 ## Environment
-See `.env.example`. Two databases: the **source DB** (read-only role) and the **Neon config DB** (read/write, dashboard-owned data).
+See `.env.example`. The source DB can be configured as one URL or as separate `SOURCE_DB_HOST/PORT/USER/PASSWORD/NAME` values; each script validates only the database it uses. Two databases: the **source DB** (read-only role) and the **Neon config DB** (read/write, dashboard-owned data).
 `GET /api/health` with header `x-health-token: <HEALTH_TOKEN>` reports connectivity of both.
 
 ## Deploying to Vercel

@@ -1,5 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
-import { getEnv } from '@/lib/env';
+import { getHealthToken } from '@/lib/env';
 import { queryConfig } from '@/lib/db/config';
 import { querySource } from '@/lib/db/source';
 
@@ -25,12 +25,7 @@ async function probe(fn: () => Promise<unknown>): Promise<{ ok: boolean; ms: num
 
 /** GET /api/health with header `x-health-token`. Reports connectivity of both databases. */
 export async function GET(req: Request) {
-  let token: string | undefined;
-  try {
-    token = getEnv().HEALTH_TOKEN;
-  } catch {
-    return Response.json({ ok: false, error: 'server misconfigured' }, { status: 500 });
-  }
+  const token = getHealthToken();
   if (!token) return new Response(null, { status: 404 });
   if (!safeEqual(req.headers.get('x-health-token') ?? '', token)) {
     return Response.json({ ok: false }, { status: 401 });
