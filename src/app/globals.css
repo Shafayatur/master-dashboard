@@ -2,5 +2,54 @@
 @tailwind components;
 @tailwind utilities;
 
-html { -webkit-text-size-adjust: 100%; }
-body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+:root {
+  --canvas: 243 245 248;
+  --surface: 255 255 255;
+  --fg: 15 27 45;
+  --muted: 91 107 130;
+  --line: 224 230 238;
+  --ink: 14 27 46;
+  --ink-line: 31 48 73;
+  --ink-fg: 196 207 222;
+  --focus: 5 150 105;
+}
+
+.dark {
+  --canvas: 7 13 24;
+  --surface: 13 22 37;
+  --fg: 230 235 243;
+  --muted: 140 156 178;
+  --line: 29 41 61;
+  --ink: 4 9 18;
+  --ink-line: 22 34 54;
+  --ink-fg: 176 190 209;
+  --focus: 52 211 153;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
+}
+
+/* Money columns line up: every number uses tabular figures. */
+body {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid rgb(var(--focus));
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

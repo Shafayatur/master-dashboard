@@ -46,3 +46,13 @@ docs/             Metric dictionary and architecture decisions
 ```
 
 See `CONTRIBUTING.md` for the branch and commit rules.
+
+## Sign-in
+
+The dashboard sits behind one shared team passkey.
+
+1. `npm run auth:hash` prompts for a passkey (input is hidden) and prints `AUTH_PASSKEY_HASH` and `SESSION_SECRET`.
+2. Put both in `.env.local` and in the Vercel environment variables (Production and Preview).
+3. Sessions last 7 days. Changing the passkey or `SESSION_SECRET` signs everyone out.
+4. After 5 wrong attempts from one address in 15 minutes that address is locked out for the rest of the window (40 in total across all addresses locks everyone out). Attempts are stored as salted hashes in the config DB.
+5. If the config DB is unreachable nobody can sign in (the check fails closed).
