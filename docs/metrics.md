@@ -57,3 +57,11 @@ Paid = `returns.status = 'completed'` by `returns."date"`; in flight = `initiate
 
 ## Targets
 Entered manually per month (`monthly_targets`, Neon). Achievement = month-to-date sales / target.
+
+## Command Center definitions (implemented in `src/lib/queries/overview.ts`)
+- **Ticket** = one order. Tickets booked use `order."createdAt"` (any status, cancelled share shown); tickets invested = distinct orders with a matching deposit in the period.
+- **Registrations, booked and invested are period activity, not a cohort funnel.** Cohort conversion arrives with the Investors tab.
+- **Deposit/order/product filters** apply to sales, tickets invested, investors and the trend. Registrations ignore them. The Segment filter is not applied on this page yet.
+- **Needs attention** is always "right now" and ignores the filters: pending deposits, bookings open more than 3 days, payouts in flight, investments maturing in the next 14 days.
+- **Target pacing** compares month-to-date approved sales (all products, investors only) with the manual monthly target; projection = actual / days elapsed x days in month.
+- Trend is daily up to 92 days, monthly beyond that; the compare line is aligned by position in the period.
