@@ -152,4 +152,84 @@ export const SANITY_CHECKS: Check[] = [
         MIN(price) AS min_price, MAX(price) AS max_price, SUM(stock) AS total_stock
       FROM products p WHERE p."deletedAt" IS NULL`,
   },
+  {
+    title: '13. Future-dated records',
+    why: 'Deposits and payouts dated after today. Shows how many, how far ahead, and how much money, so "this month" figures can be capped correctly. An empty result means none exist.',
+    sql: `
+      WITH today AS (SELECT (now() AT TIME ZONE 'UTC' + interval '6 hours')::date AS dt),
+      x AS (
+        SELECT 'deposits' AS tbl, d.status::text AS status, d.amount AS amount, d."date" AS ts,
+          ((d."date" + interval '6 hours')::date - (SELECT dt FROM today)) AS days_ahead
+        FROM deposits d WHERE d."deletedAt" IS NULL
+        UNION ALL
+        SELECT 'returns', r.status::text, r.amount, r."date", ((r."date" + interval '6 hours')::date - (SELECT dt FROM today))
+        FROM returns r WHERE r."deletedAt" IS NULL
+      )
+      SELECT tbl, status, days_ahead, COUNT(*) AS n, ROUND(SUM(amount)::numeric, 0) AS amount_bdt, MIN(ts) AS min_ts, MAX(ts) AS max_ts
+      FROM x WHERE days_ahead > 0 GROUP BY 1, 2, 3 ORDER BY 1, 2, 3`,
+  },
+  {
+    title: '14. Invested orders past maturity',
+    why: 'How far past maturity the still-"invested" orders are, and whether a payout exists for them. Decides whether they are normal payout lag or stale status.',
+    sql: `
+      WITH sched AS (SELECT "orderId", MAX("paymentDate") AS last_pay FROM return_schedules WHERE "deletedAt" IS NULL GROUP BY 1),
+      rp AS (
+        SELECT "orderId", bool_or(status = 'initiated') AS has_initiated, bool_or(status = 'completed') AS has_completed
+        FROM returns WHERE "deletedAt" IS NULL GROUP BY 1
+      ),
+      m AS (
+        SELECT o.id, o."totalAmount" AS amount, COALESCE(rp.has_initiated, false) AS has_initiated, COALESCE(rp.has_completed, false) AS has_completed,
+          COALESCE(s.last_pay, o."investmentDate" + (split_part(p."productDuration"::text, ' ', 1)::int * interval '1 month')) AS maturity
+        FROM "order" o JOIN products p ON p.id = o."productId" LEFT JOIN sched s ON s."orderId" = o.id LEFT JOIN rp ON rp."orderId" = o.id
+        WHERE o."deletedAt" IS NULL AND o.status = 'invested'
+      ),
+      od AS (
+        SELECT m.*, (floor(EXTRACT(EPOCH FROM ((now() AT TIME ZONE 'UTC') - maturity)) / 86400))::int AS days_overdue
+        FROM m WHERE maturity < (now() AT TIME ZONE 'UTC')
+      )
+      SELECT CASE WHEN days_overdue <= 7 THEN '0-7 days' WHEN days_overdue <= 30 THEN '8-30 days' WHEN days_overdue <= 90 THEN '31-90 days' ELSE 'over 90 days' END AS overdue_by,
+        COUNT(*) AS orders, ROUND(SUM(amount)::numeric, 0) AS invested_bdt,
+        COUNT(*) FILTER (WHERE has_initiated) AS with_initiated_payout, COUNT(*) FILTER (WHERE has_completed) AS with_any_completed_payout
+      FROM od GROUP BY 1 ORDER BY MIN(days_overdue)`,
+  },
+  {
+    title: '15. Product stock vs units sold',
+    why: 'products.stock is understood to be units remaining. If so, closed projects should sit near zero and sold/(sold+left) is the fill rate. Confirms that reading.',
+    sql: `
+      WITH sold AS (
+        SELECT o."productId", SUM(o.quantity) AS units_sold
+        FROM "order" o WHERE o."deletedAt" IS NULL AND o.status IN ('invested', 'closed') GROUP BY 1
+      )
+      SELECT p."isActive" AS is_active, COUNT(*) AS products,
+        COUNT(*) FILTER (WHERE COALESCE(p.stock, 0) = 0) AS stock_zero, COUNT(*) FILTER (WHERE p.stock > 0) AS stock_positive, COUNT(*) FILTER (WHERE p.stock < 0) AS stock_negative,
+        SUM(p.stock) AS units_left, COALESCE(SUM(s.units_sold), 0) AS units_sold, COUNT(*) FILTER (WHERE s.units_sold IS NULL) AS never_sold,
+        ROUND((100.0 * SUM(s.units_sold) / NULLIF(SUM(s.units_sold) + SUM(p.stock), 0))::numeric, 1) AS pct_sold_if_stock_is_remaining
+      FROM products p LEFT JOIN sold s ON s."productId" = p.id WHERE p."deletedAt" IS NULL GROUP BY 1 ORDER BY 1 DESC`,
+  },
+  {
+    title: '16. Registration to first investment: distribution',
+    why: 'Time buckets and percentiles (negative gaps excluded). Settles the median reported by check 10 and sets the 7/30/90-day conversion windows.',
+    sql: `
+      WITH first_dep AS (
+        SELECT o."userId", MIN(d."date") AS first_dep
+        FROM deposits d JOIN "order" o ON o.id = d."orderId" WHERE ${A} AND o."deletedAt" IS NULL AND d.status = 'approved' GROUP BY 1
+      ),
+      t AS (
+        SELECT (f."userId" IS NOT NULL) AS converted, EXTRACT(EPOCH FROM (f.first_dep - u."createdAt")) / 86400 AS days
+        FROM "user" u LEFT JOIN first_dep f ON f."userId" = u.id
+        WHERE u."deletedAt" IS NULL AND u."userType" = 'investor'
+      )
+      SELECT COUNT(*) AS investors, COUNT(*) FILTER (WHERE converted) AS converted,
+        COUNT(*) FILTER (WHERE converted AND days < 0) AS negative_gap,
+        COUNT(*) FILTER (WHERE converted AND days >= 0 AND days < 1) AS same_day,
+        COUNT(*) FILTER (WHERE converted AND days >= 1 AND days < 7) AS d1_to_7,
+        COUNT(*) FILTER (WHERE converted AND days >= 7 AND days < 30) AS d7_to_30,
+        COUNT(*) FILTER (WHERE converted AND days >= 30 AND days < 90) AS d30_to_90,
+        COUNT(*) FILTER (WHERE converted AND days >= 90) AS d90_plus,
+        ROUND((percentile_cont(0.25) WITHIN GROUP (ORDER BY days) FILTER (WHERE converted AND days >= 0))::numeric, 1) AS p25_days,
+        ROUND((percentile_cont(0.5) WITHIN GROUP (ORDER BY days) FILTER (WHERE converted AND days >= 0))::numeric, 1) AS median_days,
+        ROUND((percentile_cont(0.75) WITHIN GROUP (ORDER BY days) FILTER (WHERE converted AND days >= 0))::numeric, 1) AS p75_days,
+        ROUND((percentile_cont(0.9) WITHIN GROUP (ORDER BY days) FILTER (WHERE converted AND days >= 0))::numeric, 1) AS p90_days
+      FROM t`,
+  },
 ];

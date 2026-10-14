@@ -17,7 +17,15 @@ Working preferences (stated by the user):
 - Honest representation: label estimates as estimates (for example "estimated reinvestment").
 - **Never use the company's name anywhere** (code, repo, docs, env vars, commit messages, UI copy, this kind of file). The user may reuse the project personally. Use neutral terms such as "source DB", "the platform", "investors".
 - Never ask the user to paste secrets into chat. Secrets live in `.env.local` and Vercel environment variables.
-- You cannot reach the user's databases or push to GitHub from the chat sandbox. You can build, test and zip code; the user runs it against the real DB and pushes.
+- You cannot reach the user's databases, Vercel or GitHub from the chat sandbox. You can build, test and verify code against a local Postgres and a headless browser; the user runs it against the real DB and pushes.
+
+**Delivery workflow (agreed 2026-10-14, replaces "changed files + zips")**
+- No zips. Each chunk ships as ONE `.patch` file (`git diff <previous commit> HEAD`) plus a ready commit message. The user runs `git apply --check`, `git apply`, deletes the patch file, then `npm ci` if dependencies changed, `npm test`, commits and pushes.
+- Chunks are small and must finish inside one session. Never leave a chunk half-built; split earlier instead.
+- **Every patch also updates this file** (sections 8-10 at least), so work can move to another account at any time. Verify the patch applies on a pristine checkout, then run lint, typecheck, tests and build there before delivering.
+- State plainly what was verified (tests, local Postgres, headless browser) and what was not (the user's real databases, Vercel).
+- macOS notes: zsh treats `#` in pasted commands as arguments, so never put comments on command lines. Files in `~/Downloads` can be unreadable from Terminal ("Operation not permitted"): copy the patch into the repo folder with Finder, apply, delete it. Node must be 22.12 or newer (`nvm use` reads `.nvmrc`).
+- To hand over to another account: `git archive -o master-dashboard-src.zip HEAD` (tracked files only, so no secrets), paste this file, attach the zip. Never zip `.env.local`.
 
 ## 2. Goal
 A professional, unique, "every company's dream" internal dashboard, **live on the source PostgreSQL DB**, used to make decisions and generate ideas,
@@ -43,6 +51,13 @@ not just report. Must be filterable everywhere, exportable (CSV, Excel, PDF), an
 | Design | Not bound to any brand palette. Direction: ink-navy sidebar on a light canvas, emerald for money/growth, amber for attention, rose for negative, colour-blind-safe categorical set, dark mode, tabular numerals. Animated count-up KPIs, chart draw-in, subtle tab transitions, skeleton loaders. Avoid a generic templated look |
 | Repo | https://github.com/Shafayatur/master-dashboard (private recommended: SQL reveals DB structure). Commits authored with shafayaturrahman21@gmail.com |
 | Git workflow | `main` protected, feature branches via PR, Conventional Commits, CI (lint, typecheck, test, build), Dependabot, PR template, CODEOWNERS |
+| Architecture (2026-10-14, ADR 0004) | Server components call `src/lib/queries/` directly instead of an API plus TanStack Query. Conditions: `requireSession()` in every page and route handler (guard test); route handlers return for on-demand fetches (search, Investor 360 drawer, Data Explorer, exports); queries are `server-only`, 60 s auto-refresh via `router.refresh()`, Suspense keyed by filters, charts get aggregates only; each metric query wrapped in `unstable_cache` (60 s, keyed by filters, JSON-only values); pool default 3 until the tech team confirms the connection limit |
+| Filter honesty | A filter a tab cannot apply shows a visible "not applied here" notice, never silently ignored |
+| Reconciliation | Monthly sales (deposits `"date"` +6h, approved) matched the IR daily tracker for Sept 2026 |
+| Registration spikes | Jan/Apr/Dec 2023 spikes are real; no exclusion |
+| Products | `products.stock` = units remaining. Fill rate = sold / (sold + left). Shariah filter hidden until a Shariah product exists (0 of 496 today) |
+| Active segment | Active = has an invested order not yet matured (default adopted; 290 invested orders are past maturity). Overdue orders get their own attention counter |
+| Currency text | Use "BDT" text, not a currency symbol (font fallback) |
 
 ## 4. Source DB structure (no foreign keys are declared; join by naming)
 Sensitive columns (passwords, tokens, biometric fields, national ID and tax numbers; also bank account and routing numbers in investor_bank) are omitted below and must **never** be selected.
@@ -69,17 +84,17 @@ Joins: `deposits."orderId" -> "order".id`, `"order"."userId" -> "user".id`, `"or
 `"order"` and `"user"` need double quotes; so do camelCase columns.
 
 ## 5. Metric dictionary (also in `docs/metrics.md`; keep both in sync)
-- **Investment value (payment):** `SUM(deposits.amount)` by `deposits."date"` (+6h), selected deposit statuses (default approved).
+- **Investment value (payment):** `SUM(deposits.amount::numeric)` by `deposits."date"` (+6h), selected deposit statuses (default approved), capped at today (future-dated rows excluded and counted). Reconciled with the IR tracker.
 - **Registrations (interest):** investor users by `user."createdAt"`.
 - **Tickets booked (consideration):** orders in the period, any status; show cancelled share.
-- **Tickets invested:** orders with an approved deposit in the period.
+- **Tickets invested:** DISTINCT orders with an approved deposit in the period (an order can have several approved deposits, so tickets differ from deposit counts).
 - **Unique / new / old investors:** distinct `order."userId"` on approved deposits. New = first-ever approved deposit falls in the period; old = had one before the period start.
 - **Conversion:** share of a registration cohort with an approved deposit within 7 / 30 / 90 days and ever; median days to first investment.
 - **Payouts:** paid = `returns.status = 'completed'` by `returns."date"`; in flight = `initiated`; upcoming = `return_schedules."paymentDate"`.
 - **Target vs actual:** month-to-date sales vs manual target, with run-rate projection and required daily amount.
 - **Reinvestment, three labelled levels:** (1) confirmed: `paymentMethod = 'reinvest'`; (2) payout-linked (estimated): approved deposit by an investor paid out in the previous 30 days (window adjustable); (3) repeat investor: 2nd or later investment. Decision metric: payout-to-reinvest rate within 30/60/90 days.
 - **Maturity of an order:** last `return_schedules."paymentDate"`, else `"investmentDate" + productDuration`.
-- **Segments (per investor across all orders):** Active = has an order with status `invested`. Otherwise by latest maturity: 0-30 days ago = Recently active, 30-60 = Cooling, over 60 = Inactive. Prospect = registered, never invested. Thresholds editable in `app_settings`.
+- **Segments (per investor across all orders):** Active = has an `invested` order that has not yet matured (updated 2026-10-14; overdue invested orders get their own attention counter). Otherwise by latest maturity: 0-30 days ago = Recently active, 30-60 = Cooling, over 60 = Inactive. Prospect = registered, never invested. Thresholds editable in `app_settings`.
 - Also: investor tiers by lifetime value, best/preferred tenure, best projects (value, investor count, fill rate, days to fill), concentration (top 10 / top 20% share).
 
 ## 6. Dashboard spec
@@ -96,43 +111,53 @@ Optional later: weekly AI narrative from aggregated numbers only (never raw inve
 - Each query gets a test. SQL is validated against an in-memory Postgres (PGlite) built from `db/fixtures/schema.sql` (see `src/lib/sanity/checks.test.ts`).
 - Update `docs/metrics.md` in the same change as any metric definition.
 - Do not run `npm run build` with real secrets in CI; env validation is lazy so the build works without them.
+- Every file in `src/lib/queries/` starts with `import 'server-only'`. Every page calls `await requireSession()`; every route handler starts with `requireSessionApi()` (allow-list in `src/lib/auth/require-session.test.ts`).
+- Money: `SUM(amount::numeric)`. Cached values must be plain JSON.
+- Never wrap `cookies()`, `headers()` or `searchParams` access in `try/catch`: it swallows Next's dynamic-rendering signal and Next prerenders the page statically at build (a login redirect was once baked in that way; regression tests exist). Always smoke-test the BUILT app (`next build` then `next start`) with and without a session, and check the route table shows `ƒ` (dynamic) for every app page.
+- Source DB access: `querySource()` awaits a read-only session setting once per pooled connection (no fire-and-forget queries).
 
-## 8. What is done (Phase 0, branch `feat/phase-0-foundation`, not yet merged)
-Verified: lint, typecheck, 24 tests and production build all pass from a fresh clone.
-- Next.js 14 + TS + Tailwind + Vitest scaffold; placeholder home page.
-- `src/lib/env.ts`: Zod env validation (lazy). Variables: `SOURCE_DATABASE_URL`, `SOURCE_DB_SSL`, `SOURCE_DB_SSL_REJECT_UNAUTHORIZED` (false: self-signed cert), `SOURCE_DB_POOL_MAX`, `CONFIG_DATABASE_URL`, `HEALTH_TOKEN`.
-- `src/lib/time.ts`: Dhaka helpers (+6h, range to UTC). `src/lib/db/pg-types.ts`: forces UTC parsing of `timestamp without time zone` and numeric parsing of bigint counts.
-- `src/lib/db/source.ts` (read-only pool + SELECT-only guard in `src/lib/sql/guard.ts`), `src/lib/db/config.ts` (Neon pool), `pool-config.ts` (strips `sslmode`, sets TLS explicitly).
-- `src/app/api/health/route.ts`: needs header `x-health-token` equal to `HEALTH_TOKEN` (404 if unset); reports connectivity of both DBs.
-- `db/config/001_init.sql` + `scripts/migrate-config.ts` (`npm run db:migrate`): tables `monthly_targets`, `app_settings` (segment thresholds, reinvest window), `export_log`, `login_attempts`.
-- `scripts/sanity-check.ts` + `src/lib/sanity/checks.ts` (`npm run db:check`): 12 aggregate-only checks, writes `reports/sanity-<date>.md`. Run with `tsx --conditions=react-server` because of the `server-only` import.
-- CI workflow, Dependabot, PR template, CODEOWNERS, README, CONTRIBUTING, `docs/metrics.md`, ADRs 0001-0003.
-- Git: `main` has one initial commit; the branch has 10 conventional commits.
+## 8. What is done
+Verified on the user's machine unless noted. Branch names are historical; everything is meant to land on `main` through PRs.
+- **Phase 0 foundation** (merged or pending PR): Next.js 14, Zod env, Dhaka time helpers, read-only source pool with SELECT-only guard, Neon config DB + migration, health endpoint, 12-check sanity report, CI, docs.
+- **Patch 001** (fix): env validated per database; source DB configurable as one URL or as `SOURCE_DB_HOST/PORT/USER/PASSWORD/NAME` (password percent-encoded explicitly). `db:migrate` needs only the Neon URL.
+- **Patch 002** (feat): shared-passkey sign-in (scrypt hash in env, HMAC-signed httpOnly cookie, 7 days, signs out when the passkey changes), login attempt limiting in the config DB (5 per address / 15 min, 40 global, fails closed), middleware gate, app shell (navy sidebar, 8 tab placeholders, dark mode, mobile drawer), URL-state filter bar (date presets and custom range, comparison period, deposit/order/payment filters, reinvest toggle, tenure, return type, Shariah, investor kind, segment), design tokens. 57 tests. Verified in headless Chromium and against a local Postgres with TLS.
+- **Patch 003 / chunk A** (foundations, no UI): `requireSession()` on every page plus guard test; `querySource` read-only session fix (removes the pg deprecation warning); `server-only` test stub; sanity checks 13-16; ADR 0004; metric dictionary v0.2.
+- Command Center and all other tabs are still placeholders.
+
+### Sanity report findings (2026-10-14, aggregate)
+Clean: all relationship checks show zero orphans; server is UTC; deposit timestamps carry time of day; payout dates sit at 18:00 UTC (Dhaka midnight), consistent with +6h.
+Numbers: approved sales about 1.75B BDT in 14,310 deposits; recent months 44-51M BDT (peak 80.2M in April 2026); 23,360 registered investors, 2,516 ever invested (10.8%); monthly unique investors 133-466; 496 products, 8 active, 0 Shariah; reinvest deposits 34 (0.2% of sales).
+Open findings: (1) deposits and completed payouts exist dated up to 19 Oct 2026 while the server clock read 14 Oct; check 13 quantifies them. (2) 290 invested orders (9.7%) are past maturity; check 14 shows how late. (3) check 10's median (10.8) equals the conversion percentage (10.8), possibly coincidence; check 16 settles it; 51 investors have a first deposit before registration. (4) By arithmetic, all 29 pending/rejected deposits are dated October 2026 (an inference: older rejected rows may be purged, so the status filter matters mostly for the current month). (5) `return_schedules` covers 2,927 of 3,005 invested orders. (6) 112 invested and 482 closed orders have several approved deposits.
 
 ## 9. Waiting on the user
-1. Push both branches to GitHub, open the PR, confirm CI is green.
-2. Create `.env.local` from `.env.example`. `HEALTH_TOKEN` is any random string of 16+ characters, for example `openssl rand -hex 24`.
-3. Run `npm run db:migrate` (Neon tables) and `npm run db:check`, then paste `reports/sanity-<date>.md` into the chat.
-4. Get a read-only DB user from the tech team and confirm the source DB is reachable from outside the company network.
-5. Deploy the branch on Vercel with the env vars and call `/api/health` to prove connectivity.
-6. Reconcile the sales-by-month numbers (check 6) against the existing IR daily tracker.
+1. Apply patch 003, run `npm test` (expect 80 passing), commit, push.
+2. Run `npm run db:check` again and paste only checks 13-16 from `reports/sanity-<date>.md` (results feed chunk B/C decisions).
+3. Ask the tech team: the source DB connection limit, the DB region, and whether Vercel IPs must be allow-listed (static IPs are a paid Vercel add-on).
+4. Before putting DB credentials on a hosting account, get company approval (the credentials and investor data pass through that host). Vercel Hobby is non-commercial; an internal company tool needs a team/Pro plan or the VPS fallback.
+5. Deploy checklist (when approved): merge the PR to `main`; import the repo in Vercel; Node 22.x; set env vars for Production only (`SOURCE_DB_*`, `SOURCE_DB_SSL=require`, `SOURCE_DB_SSL_REJECT_UNAUTHORIZED=false`, `SOURCE_DB_POOL_MAX=3`, `CONFIG_DATABASE_URL`, `HEALTH_TOKEN`, `AUTH_PASSKEY_HASH`, `SESSION_SECRET`); deploy; open the URL (expect redirect to `/login`, then sign in); then `curl -H "x-health-token: <token>" https://<project>.vercel.app/api/health` and expect both databases connected. Set the function region near the source DB. If the source DB refuses the connection, send the error text only.
 
-## 10. Roadmap
-| Phase | Deliverable |
-|---|---|
-| 1 | Passkey login (hash in env, signed cookie, attempt limiting), app shell, filter bar with URL state, Command Center |
-| 2 | Sales and Projects & Tenure |
-| 3 | Investors, segmentation, cohorts, Investor 360, global search |
-| 4 | Money Flow, Action Lists, Targets |
-| 5 | Data Explorer, exports (CSV/XLSX/PDF), export log |
-| 6 | Polish, animation, docs, production deploy |
-Acceptance for every phase: lint, typecheck, tests green; numbers reconciled with the source; metric docs updated; delivery as changed files + commit messages.
+## 10. Roadmap (small chunks, each one patch plus an updated handoff)
+| Chunk | Deliverable | Status |
+|---|---|---|
+| A | Foundations: session guard, pg fix, checks 13-16, ADR 0004, metrics v0.2 | done (patch 003) |
+| B | Query layer: filters-to-SQL builder, KPI queries with tests, `unstable_cache` wrapper, number formatting util (no UI) | next |
+| C | Command Center UI 1: 8 KPI cards with deltas and count-up, lakh/crore toggle, skeletons, error state, 60 s auto-refresh, "not applied here" notices, product/category filter options, hide Shariah when none | |
+| D | Command Center UI 2: daily trend vs comparison period, funnel strip | |
+| E | Target pacing (read `monthly_targets`, set-target server action) and attention counters | |
+| F | "What changed" rule-based insights | |
+| G-H | Phase 2: Sales tab; Projects & Tenure (fill rate, preferred tenure, what to launch next) | |
+| I-K | Phase 3: Investors (segments, tiers), cohorts and concentration, Investor 360 drawer and global search (route handlers) | |
+| L-N | Phase 4: Money Flow, Action Lists (call sheets), Targets page | |
+| O-P | Phase 5: Data Explorer, exports (CSV, XLSX, PDF) and export log | |
+| Q | Phase 6: polish, Next.js upgrade (current audit shows critical advisories on Next 14), production deploy | |
+Acceptance for every chunk: lint, typecheck, tests green; patch verified on a pristine checkout; metric docs updated; this file updated.
 
 ## 11. Open risks and questions
-- Source DB may block Vercel IPs; test early. Serverless needs a small connection pool (default 3).
-- Sanity report may reveal bad dates, orphaned rows, or invested orders already past maturity; adjust metric definitions before building charts.
-- `return_schedules` has no status column, so "upcoming payouts" is inferred; schedule covers only part of the orders (fallback: investment date + duration).
+- Source DB may block Vercel IPs; not yet tested from Vercel. Serverless needs a small pool (default 3) and cached queries.
+- Next.js 14 has open advisories (denial of service, PostCSS); upgrade as its own PR before production.
 - Shared passkey means no per-person audit trail; per-person login can replace it later.
+- The 5-day future-dated rows (finding 1) need a decision once check 13 shows their size.
+- Source DB region versus Neon region (us-east-2) affects latency; caching mitigates it.
 
 ## 12. First message for the new chat
-"Continue from HANDOFF.md. Phase 0 is done and pushed. Here is the sanity report: <paste>. Start Phase 1."
+"Continue from HANDOFF.md. Last completed: chunk A (patch 003). Next: chunk B. Here are sanity checks 13-16: <paste>."
