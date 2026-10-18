@@ -1,10 +1,26 @@
 import type { Metadata } from 'next';
+import { cookies } from 'next/headers';
+import { Suspense } from 'react';
+import { CommandCenterSkeleton } from '@/components/dashboard/skeleton';
+import { TargetsView } from '@/components/dashboard/targets-view';
 import { requireSession } from '@/lib/auth/require-session';
-import { PlaceholderPage } from '@/components/shell/placeholder-page';
+import { MONEY_UNIT_COOKIE, parseMoneyUnit, type MoneyUnit } from '@/lib/format/money';
+import { getTargetsOverview } from '@/lib/queries/targets-page';
+import { todayDhaka } from '@/lib/time';
 
 export const metadata: Metadata = { title: 'Targets' };
 
-export default async function Page({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
+async function Loaded({ unit }: { unit: MoneyUnit }) {
+  const data = await getTargetsOverview(todayDhaka());
+  return <TargetsView data={data} unit={unit} />;
+}
+
+export default async function TargetsPage() {
   await requireSession();
-  return <PlaceholderPage title="Targets" phase="phase 4" intro="Monthly targets with pacing and the required daily amount." searchParams={searchParams} />;
+  const unit = parseMoneyUnit(cookies().get(MONEY_UNIT_COOKIE)?.value);
+  return (
+    <Suspense key={unit} fallback={<CommandCenterSkeleton />}>
+      <Loaded unit={unit} />
+    </Suspense>
+  );
 }
