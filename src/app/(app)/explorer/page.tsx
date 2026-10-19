@@ -1,10 +1,36 @@
 import type { Metadata } from 'next';
+import { Suspense } from 'react';
+import { ExplorerView } from '@/components/dashboard/explorer-view';
+import { CommandCenterSkeleton } from '@/components/dashboard/skeleton';
 import { requireSession } from '@/lib/auth/require-session';
-import { PlaceholderPage } from '@/components/shell/placeholder-page';
+import { getExplorer } from '@/lib/queries/explorer-page';
+import { parseExplorerParams } from '@/lib/queries/explorer';
+import { todayDhaka } from '@/lib/time';
 
 export const metadata: Metadata = { title: 'Data Explorer' };
 
-export default async function Page({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
+async function Loaded({
+  params,
+  searchParams,
+}: {
+  params: ReturnType<typeof parseExplorerParams>;
+  searchParams: Record<string, string | string[] | undefined>;
+}) {
+  const data = await getExplorer(params);
+  return <ExplorerView data={data} params={params} searchParams={searchParams} />;
+}
+
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Record<string, string | string[] | undefined>;
+}) {
   await requireSession();
-  return <PlaceholderPage title="Data Explorer" phase="phase 5" intro="Raw tables with filters and export." searchParams={searchParams} />;
+  const today = todayDhaka();
+  const params = parseExplorerParams(searchParams, today);
+  return (
+    <Suspense key={JSON.stringify(searchParams)} fallback={<CommandCenterSkeleton />}>
+      <Loaded params={params} searchParams={searchParams} />
+    </Suspense>
+  );
 }
