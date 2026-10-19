@@ -7,6 +7,7 @@ interface Props {
   amountLabel: string;
   shown: number;
   exportHref: string;
+  excelHref?: string;
   headers: string[];
   rows: ReactNode[][];
   emptyText: string;
@@ -22,6 +23,7 @@ export function ActionListCard({
   amountLabel,
   shown,
   exportHref,
+  excelHref,
   headers,
   rows,
   emptyText,
@@ -37,13 +39,24 @@ export function ActionListCard({
           <p className="mt-1 text-xs text-muted">{description}</p>
           <p className="mt-1 text-xs text-muted">{amountLabel}</p>
         </div>
-        <a
-          href={exportHref}
-          download
-          className="shrink-0 rounded-md border border-line px-2 py-1 text-xs hover:text-fg"
-        >
-          Export CSV
-        </a>
+        <div className="flex shrink-0 gap-2">
+          <a
+            href={exportHref}
+            download
+            className="rounded-md border border-line px-2 py-1 text-xs hover:text-fg"
+          >
+            Export CSV
+          </a>
+          {excelHref && (
+            <a
+              href={excelHref}
+              download
+              className="rounded-md border border-line px-2 py-1 text-xs hover:text-fg"
+            >
+              Export Excel
+            </a>
+          )}
+        </div>
       </div>
 
       {rows.length === 0 ? (

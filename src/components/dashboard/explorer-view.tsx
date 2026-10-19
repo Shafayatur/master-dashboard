@@ -131,13 +131,22 @@ export function ExplorerView({ data, params, searchParams }: Props) {
             Apply
           </button>
         </form>
-        <Link
-          href={exportUrl}
-          download
-          className="rounded-md border border-line px-3 py-1.5 text-sm text-muted hover:text-fg"
-        >
-          Export CSV
-        </Link>
+        <div className="flex gap-2">
+          <Link
+            href={exportUrl}
+            download
+            className="rounded-md border border-line px-3 py-1.5 text-sm text-muted hover:text-fg"
+          >
+            Export CSV
+          </Link>
+          <Link
+            href={`${exportUrl}${exportQuery.size ? '&' : ''}fmt=xlsx`}
+            download
+            className="rounded-md border border-line px-3 py-1.5 text-sm text-muted hover:text-fg"
+          >
+            Export Excel
+          </Link>
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted">

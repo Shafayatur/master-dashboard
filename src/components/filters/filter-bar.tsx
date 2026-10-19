@@ -226,7 +226,7 @@ export function FilterBar() {
   const dirty = count > 0 || filters.preset !== 'mtd' || filters.compare !== 'lastMonth';
 
   return (
-    <div className="relative z-20 border-b border-line bg-surface/90 px-4 py-3 backdrop-blur sm:px-6" aria-busy={pending}>
+    <div className="relative z-20 border-b border-line bg-surface/90 px-4 py-3 backdrop-blur sm:px-6 print:hidden" aria-busy={pending}>
       <div className="flex flex-wrap items-center gap-2">
         <DatePicker key={`${filters.range.from}_${filters.range.to}`} filters={filters} update={update} />
         <label className={cn(triggerClass, 'relative gap-1.5 pr-2')}>
