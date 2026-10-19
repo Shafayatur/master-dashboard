@@ -1,6 +1,8 @@
 export interface Column<T> {
   header: string;
   value: (row: T) => string | number;
+  /** Used by the Excel export for number formats; the CSV ignores it. */
+  kind?: 'text' | 'int' | 'money' | 'date';
 }
 
 /**
