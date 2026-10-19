@@ -11,7 +11,7 @@ const nextConfig = {
   reactStrictMode: true,
   poweredByHeader: false,
   // pg uses native Node APIs; keep it out of the bundler
-  experimental: { serverComponentsExternalPackages: ['pg'] },
+  experimental: { serverComponentsExternalPackages: ['pg', 'exceljs'] },
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }];
   },

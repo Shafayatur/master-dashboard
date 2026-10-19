@@ -14,9 +14,9 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
   const title = NAV.find((n) => isActive(pathname, n.href))?.label ?? 'Master Dashboard';
 
   return (
-    <div className="min-h-screen lg:pl-60">
+    <div className="min-h-screen lg:pl-60 print:pl-0">
       <Sidebar open={open} onClose={() => setOpen(false)} />
-      <header className="flex h-14 items-center gap-3 border-b border-line bg-surface px-4 sm:px-6">
+      <header className="flex h-14 items-center gap-3 border-b border-line bg-surface px-4 sm:px-6 print:hidden">
         <button type="button" onClick={() => setOpen(true)} aria-label="Open menu" className="lg:hidden">
           <Menu className="h-5 w-5" aria-hidden />
         </button>
@@ -25,7 +25,7 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
         <InvestorSearch />
       </header>
       <FilterBar />
-      <main className="px-4 py-6 sm:px-6">{children}</main>
+      <main className="px-4 py-6 sm:px-6 print:px-0">{children}</main>
     </div>
   );
 }

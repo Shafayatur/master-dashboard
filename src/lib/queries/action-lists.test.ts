@@ -2,7 +2,7 @@ import { PGlite } from '@electric-sql/pglite';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
-import { listToCsv } from '@/lib/export/action-list-csv';
+import { listExport, listToCsv } from '@/lib/export/action-list-csv';
 import { assertReadOnlySql } from '@/lib/sql/guard';
 import { loadActionLists } from './action-lists';
 import type { QueryFn } from './sql-filters';
@@ -79,5 +79,15 @@ describe('loadActionLists', () => {
     expect(csv.split('\r\n')[0]).toBe('\uFEFFName,Phone,Email,Last project,Matured on,Days since,Lifetime value,Investments');
     expect(csv).toContain('User Four,+8801711000004,u4@example.com,Dairy A,2026-09-01,43,500000,1');
     expect(listToCsv('pending', d)).toContain('User Nine,+8801700000009,u9@example.com,7000,bank_deposit,2026-10-10,4');
+  });
+  it('builds an Excel call sheet with real numbers and text phone numbers', async () => {
+    const d = await loadActionLists(q, NOW, { maturingDays: 14, limit: 50 });
+    const buf = await listExport('pending', d).toXlsx();
+    const wb = new (await import('exceljs')).default.Workbook();
+    await wb.xlsx.load(buf as unknown as ArrayBuffer);
+    const ws = wb.worksheets[0]!;
+    expect(ws.name).toBe('Pending deposits');
+    expect(ws.getRow(2).getCell(2).value).toBe('+8801700000009');
+    expect(ws.getRow(2).getCell(4).value).toBe(7000);
   });
 });

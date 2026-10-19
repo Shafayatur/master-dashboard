@@ -4,6 +4,7 @@ import { RefreshCw } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useTransition } from 'react';
 import { cn } from '@/components/ui/cn';
+import { PrintButton } from './print-button';
 import { MONEY_UNIT_COOKIE, type MoneyUnit } from '@/lib/format/money';
 import { formatDhaka } from '@/lib/time';
 
@@ -41,12 +42,15 @@ export function PageTools({ generatedAt, unit }: { generatedAt: string; unit: Mo
   return (
     <div className="flex items-center gap-3 text-xs text-muted">
       <span>Updated {formatDhaka(new Date(generatedAt)).slice(11)} Dhaka</span>
-      <button type="button" onClick={refresh} aria-label="Refresh now" className="rounded-md border border-line p-1.5 hover:text-fg">
-        <RefreshCw className={cn('h-3.5 w-3.5', pending && 'animate-spin')} aria-hidden />
-      </button>
-      <div className="inline-flex overflow-hidden rounded-md border border-line" role="group" aria-label="Amount unit">
-        {seg('m', 'K/M')}
-        {seg('lakh', 'Lakh/Cr')}
+      <div className="flex items-center gap-3 print:hidden">
+        <PrintButton />
+        <button type="button" onClick={refresh} aria-label="Refresh now" className="rounded-md border border-line p-1.5 hover:text-fg">
+          <RefreshCw className={cn('h-3.5 w-3.5', pending && 'animate-spin')} aria-hidden />
+        </button>
+        <div className="inline-flex overflow-hidden rounded-md border border-line" role="group" aria-label="Amount unit">
+          {seg('m', 'K/M')}
+          {seg('lakh', 'Lakh/Cr')}
+        </div>
       </div>
     </div>
   );

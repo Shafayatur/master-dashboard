@@ -64,6 +64,7 @@ export function ActionsView({ data, unit }: { data: ActionListsData; unit: Money
           amountLabel={`Invested amount: ${formatMoney(data.maturing.amount, unit)}`}
           shown={data.maturing.rows.length}
           exportHref={`/api/export/actions?list=maturing&days=${data.maturingDays}`}
+          excelHref={`/api/export/actions?list=maturing&days=${data.maturingDays}&fmt=xlsx`}
           headers={['Investor', 'Project', 'Amount', 'Matures', 'Days left', 'Lifetime value', 'Investments']}
           rows={data.maturing.rows.map((row) => [
             <InvestorCell key={`investor-${row.orderId}`} investor={row} />,
@@ -83,6 +84,7 @@ export function ActionsView({ data, unit }: { data: ActionListsData; unit: Money
           amountLabel={`Lifetime value: ${formatMoney(data.cooling.amount, unit)}`}
           shown={data.cooling.rows.length}
           exportHref="/api/export/actions?list=cooling"
+          excelHref="/api/export/actions?list=cooling&fmt=xlsx"
           headers={['Investor', 'Last project', 'Matured on', 'Days since', 'Lifetime value', 'Investments']}
           rows={data.cooling.rows.map((row) => [
             <InvestorCell key={`investor-${row.userId}`} investor={row} />,
@@ -101,6 +103,7 @@ export function ActionsView({ data, unit }: { data: ActionListsData; unit: Money
           amountLabel={`Booked amount: ${formatMoney(data.stuck.amount, unit)}`}
           shown={data.stuck.rows.length}
           exportHref="/api/export/actions?list=stuck"
+          excelHref="/api/export/actions?list=stuck&fmt=xlsx"
           headers={['Investor', 'Project', 'Status', 'Amount', 'Booked on', 'Days open']}
           rows={data.stuck.rows.map((row) => [
             <InvestorCell key={`investor-${row.orderId}`} investor={row} />,
@@ -119,6 +122,7 @@ export function ActionsView({ data, unit }: { data: ActionListsData; unit: Money
           amountLabel={`Pending amount: ${formatMoney(data.pending.amount, unit)}`}
           shown={data.pending.rows.length}
           exportHref="/api/export/actions?list=pending"
+          excelHref="/api/export/actions?list=pending&fmt=xlsx"
           headers={['Investor', 'Amount', 'Method', 'Deposit date', 'Days waiting']}
           rows={data.pending.rows.map((row) => [
             <InvestorCell key={`investor-${row.depositId}`} investor={row} />,

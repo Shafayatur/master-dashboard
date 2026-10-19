@@ -53,3 +53,26 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+@media print {
+  :root {
+    --canvas: 243 245 248;
+    --surface: 255 255 255;
+    --fg: 15 27 45;
+    --muted: 91 107 130;
+    --line: 224 230 238;
+    --ink: 14 27 46;
+    --ink-line: 31 48 73;
+    --ink-fg: 196 207 222;
+    --focus: 5 150 105;
+  }
+
+  body {
+    background: white;
+  }
+
+  .rounded-xl,
+  tr {
+    break-inside: avoid;
+  }
+}
