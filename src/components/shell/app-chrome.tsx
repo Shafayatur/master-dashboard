@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { Menu } from 'lucide-react';
 import { FilterBar } from '@/components/filters/filter-bar';
+import { InvestorSearch } from './investor-search';
 import { Sidebar } from './sidebar';
 import { NAV, isActive } from './nav';
 
@@ -20,6 +21,8 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
           <Menu className="h-5 w-5" aria-hidden />
         </button>
         <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
+        <div className="flex-1" />
+        <InvestorSearch />
       </header>
       <FilterBar />
       <main className="px-4 py-6 sm:px-6">{children}</main>

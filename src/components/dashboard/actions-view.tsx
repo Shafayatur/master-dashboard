@@ -9,7 +9,11 @@ const windows = [7, 14, 30] as const;
 function InvestorCell({ investor }: { investor: Contact }) {
   return (
     <div>
-      <p>{investor.name}</p>
+      <p>
+        <Link href={`/investors/${investor.userId}`} className="font-medium hover:underline">
+          {investor.name}
+        </Link>
+      </p>
       <div className="mt-0.5 space-y-0.5 text-xs text-muted">
         {investor.phone && (
           <p>
