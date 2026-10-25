@@ -5,11 +5,11 @@ import { CommandCenterSkeleton } from '@/components/dashboard/skeleton';
 import { requireSession } from '@/lib/auth/require-session';
 import { parseFilters, serializeFilters, type Filters } from '@/lib/filters/schema';
 import { MONEY_UNIT_COOKIE, parseMoneyUnit, type MoneyUnit } from '@/lib/format/money';
-import { getCommandCenter } from '@/lib/queries/command-center';
+import { getHome } from '@/lib/queries/home-page';
 import { todayDhaka } from '@/lib/time';
 
 async function Loaded({ filters, today, unit }: { filters: Filters; today: string; unit: MoneyUnit }) {
-  const data = await getCommandCenter(filters, today);
+  const data = await getHome(filters, today);
   return <CommandCenterView data={data} filters={filters} unit={unit} />;
 }
 
