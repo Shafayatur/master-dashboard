@@ -7,5 +7,6 @@
 | Command Center screen (KPI cards, trend chart, target ring, funnel, attention, insights, auto-refresh, unit toggle) | this PR (feat/command-center-screen) |
 | Sales, Projects & Tenure | after that |
 | Investors + segments, Money Flow, Action Lists, Targets, Explorer, exports | later phases |
+| Chart toolkit (KpiCard, Sparkline, DonutChart, AreaChart, HBarList, Heatmap, ExportBar) and the `/design` gallery; see `docs/design.md` | this PR (feat/chart-toolkit) |
 
 Open items: sanity report not yet reviewed against real data; target rows are added in Neon until the Targets tab exists.
