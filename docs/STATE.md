@@ -8,5 +8,6 @@
 | Sales, Projects & Tenure | after that |
 | Investors + segments, Money Flow, Action Lists, Targets, Explorer, exports | later phases |
 | Chart toolkit (KpiCard, Sparkline, DonutChart, AreaChart, HBarList, Heatmap, ExportBar) and the `/design` gallery; see `docs/design.md` | this PR (feat/chart-toolkit) |
+| Command Center visual data (`kpiSpark`, payouts, sales vs reinvest, project/category donuts, segments, recent activity); see `docs/metrics.md` | this PR (feat/home-data) |
 
 Open items: sanity report not yet reviewed against real data; target rows are added in Neon until the Targets tab exists.
