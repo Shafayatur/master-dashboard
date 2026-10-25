@@ -48,7 +48,7 @@ export type HomeData = CommandCenterData & {
 };
 
 /** Dhaka bucket label (first day of the day/month) of a stored UTC timestamp column. `bucket` is a typed constant, never user input. */
-const bucketOf = (bucket: Bucket, col: string): string => `to_char(date_trunc('${bucket}', ${dhakaTs(col)}), 'YYYY-MM-DD')`;
+export const bucketOf = (bucket: Bucket, col: string): string => `to_char(date_trunc('${bucket}', ${dhakaTs(col)}), 'YYYY-MM-DD')`;
 
 const INVESTOR = `u."deletedAt" IS NULL AND u."userType"::text = 'investor'`;
 
