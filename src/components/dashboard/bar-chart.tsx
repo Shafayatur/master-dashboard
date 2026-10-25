@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { formatMoney, type MoneyUnit } from '@/lib/format/money';
+import { formatInt, formatMoney, type MoneyUnit } from '@/lib/format/money';
 
 const PAD = { l: 68, r: 12, t: 12, b: 34 };
 const COLOR_VALUES: Record<string, string> = {
@@ -19,6 +19,7 @@ interface Item {
 interface Props {
   items: Item[];
   unit: MoneyUnit;
+  kind?: 'money' | 'int';
   height?: number;
 }
 
@@ -34,7 +35,7 @@ function fillColor(color: string): string {
   return COLOR_VALUES[color] ?? color;
 }
 
-export function BarChart({ items, unit, height = 220 }: Props) {
+export function BarChart({ items, unit, kind = 'money', height = 220 }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(640);
   const [hover, setHover] = useState<number | null>(null);
@@ -61,6 +62,7 @@ export function BarChart({ items, unit, height = 220 }: Props) {
   const labelStride = slotWidth >= 36 ? 1 : slotWidth < 18 ? 3 : 2;
   const selected = hover === null ? null : items[hover];
   const selectedTotal = selected?.values.reduce((sum, part) => sum + part.value, 0) ?? 0;
+  const format = (value: number) => (kind === 'int' ? formatInt(Math.round(value)) : formatMoney(value, unit));
 
   const onMove = (event: React.MouseEvent<SVGSVGElement>) => {
     const rect = event.currentTarget.getBoundingClientRect();
@@ -78,7 +80,7 @@ export function BarChart({ items, unit, height = 220 }: Props) {
         width={width}
         height={height}
         role="img"
-        aria-label={`Stacked column chart with ${items.length} periods, total ${formatMoney(items.reduce((sum, item) => sum + item.values.reduce((itemSum, part) => itemSum + part.value, 0), 0), unit)}`}
+        aria-label={`Stacked column chart with ${items.length} periods, total ${format(items.reduce((sum, item) => sum + item.values.reduce((itemSum, part) => itemSum + part.value, 0), 0))}`}
         onMouseMove={onMove}
         onMouseLeave={() => setHover(null)}
       >
@@ -86,7 +88,7 @@ export function BarChart({ items, unit, height = 220 }: Props) {
           <g key={tick}>
             <line x1={PAD.l} x2={width - PAD.r} y1={y(tick)} y2={y(tick)} stroke="rgb(var(--line))" />
             <text x={PAD.l - 8} y={y(tick) + 4} textAnchor="end" fontSize="11" fill="rgb(var(--muted))">
-              {formatMoney(tick, unit)}
+              {format(tick)}
             </text>
           </g>
         ))}
@@ -137,12 +139,12 @@ export function BarChart({ items, unit, height = 220 }: Props) {
                 <span className="h-2 w-2 rounded-full" style={{ backgroundColor: fillColor(part.color) }} aria-hidden />
                 {part.name}
               </span>
-              <span className="tabular-nums">{formatMoney(part.value, unit)}</span>
+              <span className="tabular-nums">{format(part.value)}</span>
             </p>
           ))}
           <p className="mt-1 flex justify-between gap-3 border-t border-line pt-1 font-medium">
             <span>Total</span>
-            <span className="tabular-nums">{formatMoney(selectedTotal, unit)}</span>
+            <span className="tabular-nums">{format(selectedTotal)}</span>
           </p>
         </div>
       )}
