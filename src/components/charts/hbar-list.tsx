@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { formatInt, formatMoney, type MoneyUnit } from '@/lib/format/money';
 import { CHART_COLORS } from './chart-colors';
 
@@ -5,7 +6,7 @@ interface Item {
   key: string;
   label: string;
   value: number;
-  hint?: string;
+  hint?: ReactNode;
 }
 
 interface Props {
