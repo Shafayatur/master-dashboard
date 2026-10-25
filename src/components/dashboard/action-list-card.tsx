@@ -39,7 +39,7 @@ export function ActionListCard({
           <p className="mt-1 text-xs text-muted">{description}</p>
           <p className="mt-1 text-xs text-muted">{amountLabel}</p>
         </div>
-        <div className="flex shrink-0 gap-2">
+        <div className="flex shrink-0 gap-2 print:hidden">
           <a
             href={exportHref}
             download

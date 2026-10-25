@@ -1,7 +1,10 @@
+import { CalendarClock, Clock, Hourglass, Snowflake } from 'lucide-react';
 import Link from 'next/link';
+import { KpiCard } from '@/components/charts/kpi-card';
 import { formatInt, formatMoney, type MoneyUnit } from '@/lib/format/money';
 import type { ActionListsData, Contact } from '@/lib/queries/action-lists';
 import { ActionListCard } from './action-list-card';
+import { CountUp } from './count-up';
 import { PageTools } from './page-tools';
 
 const windows = [7, 14, 30] as const;
@@ -27,6 +30,13 @@ function InvestorCell({ investor }: { investor: Contact }) {
 }
 
 export function ActionsView({ data, unit }: { data: ActionListsData; unit: MoneyUnit }) {
+  const kpis = [
+    { label: 'Maturing soon', total: data.maturing.total, amount: data.maturing.amount, icon: CalendarClock, tone: 'blue' as const },
+    { label: 'Cooling investors', total: data.cooling.total, amount: data.cooling.amount, icon: Snowflake, tone: 'amber' as const },
+    { label: 'Stuck bookings', total: data.stuck.total, amount: data.stuck.amount, icon: Clock, tone: 'violet' as const },
+    { label: 'Pending deposits', total: data.pending.total, amount: data.pending.amount, icon: Hourglass, tone: 'rose' as const },
+  ];
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3 animate-rise">
@@ -35,6 +45,21 @@ export function ActionsView({ data, unit }: { data: ActionListsData; unit: Money
           <p className="mt-1 text-sm text-muted">Who to contact today. Live data, no filters apply.</p>
         </div>
         <PageTools generatedAt={data.generatedAt} unit={unit} />
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {kpis.map(({ label, total, amount, icon, tone }, index) => (
+          <KpiCard
+            key={label}
+            i={index}
+            icon={icon}
+            tone={tone}
+            label={label}
+            hint={formatMoney(amount, unit)}
+          >
+            <CountUp value={total} kind="int" />
+          </KpiCard>
+        ))}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
