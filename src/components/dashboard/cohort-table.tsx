@@ -20,15 +20,16 @@ function formatMonth(month: string): string {
 function RateCell({ count, registered, complete }: { count: number; registered: number; complete?: boolean }) {
   if (registered === 0) return <td className={valueCell}>-</td>;
   const pct = (count / registered) * 100;
+  const style = { backgroundColor: `rgba(16,185,129,${(pct / 100) * 0.5})` };
   if (complete === false) {
     return (
-      <td className={valueCell}>
+      <td className={valueCell} style={style}>
         <span className="italic text-muted" title="Still maturing">{pct.toFixed(1)}%</span>
       </td>
     );
   }
   return (
-    <td className={valueCell} style={{ backgroundColor: `rgba(16,185,129,${(pct / 100) * 0.5})` }}>
+    <td className={valueCell} style={style}>
       {pct.toFixed(1)}%
     </td>
   );

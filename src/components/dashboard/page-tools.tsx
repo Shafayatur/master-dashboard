@@ -40,7 +40,7 @@ export function PageTools({ generatedAt, unit }: { generatedAt: string; unit: Mo
   );
 
   return (
-    <div className="flex items-center gap-3 text-xs text-muted">
+    <div className="flex items-center gap-3 text-xs text-muted print:hidden">
       <span>Updated {formatDhaka(new Date(generatedAt)).slice(11)} Dhaka</span>
       <div className="flex items-center gap-3 print:hidden">
         <PrintButton />

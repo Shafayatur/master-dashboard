@@ -31,7 +31,11 @@ See `.env.example`. The source DB can be configured as one URL or as separate `S
 ## Deploying to Vercel
 1. Import the repo, framework Next.js.
 2. Add the environment variables from `.env.example` (Production and Preview).
-3. Verify `/api/health`. If the source DB is unreachable from Vercel (IP allow-list), run the same app in Docker on a VPS instead.
+3. In Project Settings → General, set Node.js Version to 22.x to match `.nvmrc`.
+4. Set the function region near the source DB after confirming its hosting region; do not base this on the Neon config DB region.
+5. Verify `/api/health`. If the source DB is unreachable from Vercel (IP allow-list), run the same app in Docker on a VPS instead.
+
+The app layout and export routes allow up to 30 seconds per function invocation. Explorer exports are capped at 20,000 rows; if a Vercel response exceeds its size limit, lower `EXPORT_MAX` in `src/lib/queries/explorer.ts` or implement streaming.
 
 ## Project layout
 ```

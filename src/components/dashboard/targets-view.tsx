@@ -1,5 +1,8 @@
 import { formatMoney, type MoneyUnit } from '@/lib/format/money';
 import type { TargetsOverview } from '@/lib/queries/targets';
+import { CHART_COLORS } from '@/components/charts/chart-colors';
+import { ChartCard } from '@/components/charts/chart-card';
+import { BarChart } from './bar-chart';
 import { PageTools } from './page-tools';
 import { TargetForm } from './target-form';
 import { TargetRemoveButton } from './target-remove-button';
@@ -11,6 +14,18 @@ function formatMonth(month: string): string {
 }
 
 export function TargetsView({ data, unit }: { data: TargetsOverview; unit: MoneyUnit }) {
+  const chartRows = data.rows
+    .filter((row) => !row.isFuture)
+    .slice(0, 12)
+    .reverse();
+  const chartItems = chartRows.map((row) => ({
+    label: `${new Intl.DateTimeFormat('en', { month: 'short', timeZone: 'UTC' }).format(new Date(`${row.month}T00:00:00Z`))} '${row.month.slice(2, 4)}`,
+    values: [
+      { name: 'Target', color: CHART_COLORS[1] ?? '', value: row.target ?? 0 },
+      { name: 'Achieved', color: CHART_COLORS[0] ?? '', value: row.actual },
+    ],
+  }));
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3 animate-rise">
@@ -20,6 +35,10 @@ export function TargetsView({ data, unit }: { data: TargetsOverview; unit: Money
         </div>
         <PageTools generatedAt={data.generatedAt} unit={unit} />
       </div>
+
+      <ChartCard title="Target vs achieved" subtitle="Monthly investment value · last 12 months">
+        <BarChart items={chartItems} unit={unit} />
+      </ChartCard>
 
       <div className="grid gap-4 xl:grid-cols-3">
         <TargetForm defaultMonth={data.currentMonth.slice(0, 7)} />
