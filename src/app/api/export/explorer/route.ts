@@ -7,6 +7,7 @@ import type { Row } from '@/lib/queries/sql-filters';
 import { todayDhaka } from '@/lib/time';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 30;
 
 const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
