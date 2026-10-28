@@ -6,6 +6,7 @@ import { DonutChart, DonutLegend } from '@/components/charts/donut-chart';
 import { KpiCard } from '@/components/charts/kpi-card';
 import { buildInvestorInsights } from '@/lib/dashboard/investor-insights';
 import { formatBucketLabel } from '@/lib/format/labels';
+import { investorSegmentHref } from '@/lib/drilldown';
 import { formatInt, formatMoney, type MoneyUnit } from '@/lib/format/money';
 import type { InvestorsData, SegmentKey, TierRow } from '@/lib/queries/investors';
 import type { InvestorsExtras } from '@/lib/queries/tabs-extra';
@@ -18,6 +19,8 @@ interface Props {
   data: InvestorsData;
   extras: InvestorsExtras;
   unit: MoneyUnit;
+  search: string;
+  today: string;
 }
 
 const card = 'rounded-xl border border-line bg-surface p-4';
@@ -41,13 +44,14 @@ function tierLabel(tier: TierRow, index: number, count: number, unit: MoneyUnit)
   return `${formatMoney(tier.min, unit)} to ${formatMoney(tier.max ?? tier.min, unit)}`;
 }
 
-export function InvestorsView({ data, extras, unit }: Props) {
+export function InvestorsView({ data, extras, unit, search, today }: Props) {
   const insights = buildInvestorInsights(data, unit);
   const segments = data.segments.map((segment) => ({
     key: segment.key,
     label: SEGMENT_INFO[segment.key].label,
     value: segment.investors,
     color: SEGMENT_INFO[segment.key].color,
+    href: investorSegmentHref(search, segment.key, today, segment.investors),
   }));
   const segmentByKey = new Map(data.segments.map((segment) => [segment.key, segment]));
   const registered = data.totalInvestors;
@@ -107,6 +111,7 @@ export function InvestorsView({ data, extras, unit }: Props) {
                   slices={segments}
                   centerValue={formatInt(registered)}
                   centerLabel="Investors"
+                  hint={segments.some((slice) => slice.href) ? 'Click a slice to see the records' : undefined}
                 />
                 <DonutLegend
                   slices={segments}

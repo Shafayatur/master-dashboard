@@ -12,16 +12,25 @@ export const MATURING_WITHIN_DAYS = 14;
 
 export async function salesKpis(q: QueryFn, f: Filters, r: DateRange): Promise<SalesKpis> {
   const p = new Params();
-  const b = salesBase(f, r, p);
+  const b = salesBase(f, r, p, false, {
+    materializeFirstDeposit: true,
+    joinFirstDeposit: false,
+  });
+  const investorKind = f.investorKind === 'new'
+    ? `fd.first_dep >= ${b.s} AND fd.first_dep < ${b.e}`
+    : f.investorKind === 'old'
+      ? `fd.first_dep < ${b.s}`
+      : 'TRUE';
+  const aggregateFilter = ` FILTER (WHERE b.dep_id IS NOT NULL AND (${investorKind}))`;
   const [row] = await q(
     `WITH ${b.cte}
-SELECT COALESCE(SUM(amount), 0)::float8 AS sales,
-  COUNT(*)::int AS deposits,
-  COUNT(DISTINCT "orderId")::int AS tickets_invested,
-  COUNT(DISTINCT "userId")::int AS unique_investors,
-  COUNT(DISTINCT "userId") FILTER (WHERE first_dep >= ${b.s} AND first_dep < ${b.e})::int AS new_investors,
-  COUNT(DISTINCT "userId") FILTER (WHERE first_dep < ${b.s})::int AS old_investors
-FROM base`,
+SELECT COALESCE(SUM(b.amount)${aggregateFilter}, 0)::float8 AS sales,
+  COUNT(*)${aggregateFilter}::int AS deposits,
+  COUNT(DISTINCT b."orderId")${aggregateFilter}::int AS tickets_invested,
+  COUNT(DISTINCT b."userId")${aggregateFilter}::int AS unique_investors,
+  COUNT(DISTINCT b."userId") FILTER (WHERE b.dep_id IS NOT NULL AND (${investorKind}) AND fd.first_dep >= ${b.s} AND fd.first_dep < ${b.e})::int AS new_investors,
+  COUNT(DISTINCT b."userId") FILTER (WHERE b.dep_id IS NOT NULL AND (${investorKind}) AND fd.first_dep < ${b.s})::int AS old_investors
+FROM base b FULL OUTER JOIN first_dep fd ON fd."userId" = b."userId"`,
     p.values,
   );
   return {

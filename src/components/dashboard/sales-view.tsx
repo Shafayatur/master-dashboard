@@ -6,6 +6,7 @@ import { formatInt, formatMoney, type MoneyUnit } from '@/lib/format/money';
 import { formatBucketLabel } from '@/lib/format/labels';
 import type { SalesData, BreakdownRow } from '@/lib/queries/sales';
 import type { SalesExtras } from '@/lib/queries/tabs-extra';
+import { depositSliceHref } from '@/lib/drilldown';
 import { CHART_COLORS } from '@/components/charts/chart-colors';
 import { ChartCard } from '@/components/charts/chart-card';
 import { DonutChart, DonutLegend } from '@/components/charts/donut-chart';
@@ -58,12 +59,16 @@ function BreakdownChart({
   rows,
   unit,
   note,
+  search,
+  filter,
   statusColors = false,
 }: {
   title: string;
   rows: BreakdownRow[];
   unit: MoneyUnit;
   note?: string;
+  search: string;
+  filter: 'prod' | 'cat' | 'ten' | 'rt' | 'pm' | 'st';
   statusColors?: boolean;
 }) {
   const statusRows = statusColors
@@ -77,15 +82,24 @@ function BreakdownChart({
         label: row.label,
         value: row.value,
         color: STATUS_COLORS[row.key],
+        href: depositSliceHref(search, filter, row.key, row.value),
       }))
-    : breakdownSlices(rows);
+    : breakdownSlices(rows).map((slice) => ({
+        ...slice,
+        href: depositSliceHref(search, filter, slice.key, slice.value),
+      }));
   const total = breakdownTotal(statusRows);
   const values = new Map(slices.map((slice) => [slice.key, slice.value]));
 
   return (
     <ChartCard title={title} subtitle={note}>
       <div className="flex flex-wrap items-center justify-center gap-4 sm:justify-start">
-        <DonutChart slices={slices} centerValue={formatMoney(total, unit)} centerLabel="Investment value" />
+        <DonutChart
+          slices={slices}
+          centerValue={formatMoney(total, unit)}
+          centerLabel="Investment value"
+          hint={slices.some((slice) => slice.href) ? 'Click a slice to see the records' : undefined}
+        />
         <DonutLegend
           slices={slices}
           format="value"
@@ -204,21 +218,25 @@ export function SalesView({ data, extras, filters, unit, bookingAnchor, search }
       </ChartCard>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <BreakdownChart title="Product" rows={data.breakdowns.product} unit={unit} note="Top 10" />
+        <BreakdownChart title="Product" rows={data.breakdowns.product} unit={unit} note="Top 10" search={search} filter="prod" />
         <BreakdownChart
           title="Category"
           rows={data.breakdowns.category}
           unit={unit}
           note="A product in several categories counts in each"
+          search={search}
+          filter="cat"
         />
-        <BreakdownChart title="Tenure" rows={data.breakdowns.tenure} unit={unit} />
-        <BreakdownChart title="Return type" rows={data.breakdowns.returnType} unit={unit} />
-        <BreakdownChart title="Payment method" rows={data.breakdowns.paymentMethod} unit={unit} />
+        <BreakdownChart title="Tenure" rows={data.breakdowns.tenure} unit={unit} search={search} filter="ten" />
+        <BreakdownChart title="Return type" rows={data.breakdowns.returnType} unit={unit} search={search} filter="rt" />
+        <BreakdownChart title="Payment method" rows={data.breakdowns.paymentMethod} unit={unit} search={search} filter="pm" />
         <BreakdownChart
           title="Deposit status"
           rows={statusRows}
           unit={unit}
           note="Always shows every status; ignores the deposit-status filter"
+          search={search}
+          filter="st"
           statusColors
         />
       </div>
