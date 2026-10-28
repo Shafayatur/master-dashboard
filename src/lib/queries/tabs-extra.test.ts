@@ -4,6 +4,7 @@ import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parseFilters, type Filters } from '@/lib/filters/schema';
 import { assertReadOnlySql } from '@/lib/sql/guard';
+import { registrations } from './overview';
 import type { QueryFn } from './sql-filters';
 import { loadInvestorsExtras, loadSalesExtras, type InvestorsExtras, type SalesExtras } from './tabs-extra';
 
@@ -198,7 +199,84 @@ describe('loadSalesExtras: booking heatmap (weekday x hour, Dhaka)', () => {
 describe('loadInvestorsExtras: registrations vs first investments', () => {
   let d: InvestorsExtras;
   beforeAll(async () => {
-    d = await loadInvestorsExtras(q, TODAY);
+    d = await loadInvestorsExtras(q, TODAY, filters().range);
+  });
+
+  it('counts selected-period registrations in Dhaka time and marks those with approved deposits', () => {
+    expect(d.registrationsOverTime).toEqual({
+      bucket: 'day',
+      points: [
+        { label: '2026-10-01', registered: 1, invested: 1 },
+        { label: '2026-10-02', registered: 0, invested: 0 },
+        { label: '2026-10-03', registered: 0, invested: 0 },
+        { label: '2026-10-04', registered: 0, invested: 0 },
+        { label: '2026-10-05', registered: 0, invested: 0 },
+        { label: '2026-10-06', registered: 0, invested: 0 },
+        { label: '2026-10-07', registered: 0, invested: 0 },
+        { label: '2026-10-08', registered: 0, invested: 0 },
+        { label: '2026-10-09', registered: 0, invested: 0 },
+        { label: '2026-10-10', registered: 0, invested: 0 },
+      ],
+    });
+  });
+
+  it('matches the Command Center registrations total for the same range', async () => {
+    const total = d.registrationsOverTime.points.reduce((sum, point) => sum + point.registered, 0);
+    expect(total).toBe(await registrations(q, filters().range));
+  });
+
+  it('counts an investor as invested when their approved deposit is later than registration', async () => {
+    const range = filters('', 'from=2026-10-11&to=2026-10-20').range;
+    const extras = await loadInvestorsExtras(q, TODAY, range);
+    expect(extras.registrationsOverTime).toEqual({
+      bucket: 'day',
+      points: [
+        { label: '2026-10-11', registered: 0, invested: 0 },
+        { label: '2026-10-12', registered: 0, invested: 0 },
+        { label: '2026-10-13', registered: 0, invested: 0 },
+        { label: '2026-10-14', registered: 1, invested: 1 },
+        { label: '2026-10-15', registered: 0, invested: 0 },
+        { label: '2026-10-16', registered: 0, invested: 0 },
+        { label: '2026-10-17', registered: 0, invested: 0 },
+        { label: '2026-10-18', registered: 0, invested: 0 },
+        { label: '2026-10-19', registered: 0, invested: 0 },
+        { label: '2026-10-20', registered: 1, invested: 0 },
+      ],
+    });
+  });
+
+  it('uses zero-filled monthly buckets beyond 92 days', async () => {
+    const range = filters('', MONTHLY).range;
+    const extras = await loadInvestorsExtras(q, TODAY, range);
+    expect(extras.registrationsOverTime).toEqual({
+      bucket: 'month',
+      points: [
+        { label: '2026-07-01', registered: 0, invested: 0 },
+        { label: '2026-08-01', registered: 1, invested: 1 },
+        { label: '2026-09-01', registered: 1, invested: 1 },
+        { label: '2026-10-01', registered: 1, invested: 1 },
+      ],
+    });
+  });
+
+  it('zero-fills an empty selected period', async () => {
+    const empty = new PGlite();
+    await empty.exec(readFileSync(path.join(process.cwd(), 'db/fixtures/schema.sql'), 'utf8'));
+    const eq: QueryFn = async (sql, params = []) => {
+      assertReadOnlySql(sql);
+      return (await empty.query(sql, params)).rows as Record<string, unknown>[];
+    };
+    const range = filters('', 'from=2025-01-01&to=2025-01-03').range;
+    const extras = await loadInvestorsExtras(eq, TODAY, range);
+    expect(extras.registrationsOverTime).toEqual({
+      bucket: 'day',
+      points: [
+        { label: '2025-01-01', registered: 0, invested: 0 },
+        { label: '2025-01-02', registered: 0, invested: 0 },
+        { label: '2025-01-03', registered: 0, invested: 0 },
+      ],
+    });
+    await empty.close();
   });
 
   it('covers the last 12 Dhaka months, current included, as first-of-month dates', () => {
@@ -231,7 +309,7 @@ describe('loadInvestorsExtras: registrations vs first investments', () => {
   });
 
   it('moves the window with today', async () => {
-    const earlier = await loadInvestorsExtras(q, '2026-09-30');
+    const earlier = await loadInvestorsExtras(q, '2026-09-30', filters().range);
     expect(earlier.registrationsVsFirst).toHaveLength(12);
     expect(earlier.registrationsVsFirst[0]?.month).toBe('2025-10-01');
     expect(earlier.registrationsVsFirst[11]?.month).toBe('2026-09-01');
@@ -254,17 +332,17 @@ describe('empty database', () => {
     expect(s.newVsReturning).toEqual(pairs({}));
     expect(s.weekday).toEqual(week({}));
     expect(s.bookingHeat.matrix).toEqual(heat([]));
-    const i = await loadInvestorsExtras(eq, TODAY);
+    const i = await loadInvestorsExtras(eq, TODAY, filters().range);
     expect(i.registrationsVsFirst).toHaveLength(12);
     expect(i.registrationsVsFirst.every((r) => r.registered === 0 && r.firstInvestments === 0)).toBe(true);
-  });
+  }, 15_000);
 });
 
 describe('result shape', () => {
   it('is plain JSON (safe for unstable_cache)', async () => {
     const s = await sales();
     expect(JSON.parse(JSON.stringify(s))).toEqual(s);
-    const i = await loadInvestorsExtras(q, TODAY);
+    const i = await loadInvestorsExtras(q, TODAY, filters().range);
     expect(JSON.parse(JSON.stringify(i))).toEqual(i);
   });
 });

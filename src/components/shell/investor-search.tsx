@@ -9,6 +9,7 @@ interface InvestorHit {
   name: string;
   phone: string;
   email: string;
+  orderId: number | null;
 }
 
 interface SearchResponse {
@@ -104,7 +105,7 @@ export function InvestorSearch() {
         aria-expanded={expanded}
         aria-controls="investor-search-results"
         aria-activedescendant={highlighted >= 0 ? `investor-search-option-${highlighted}` : undefined}
-        placeholder="Search investors by name, phone or email"
+        placeholder="Search by name, phone, email or order ID"
         className="w-full rounded-md border border-line bg-canvas px-3 py-1.5 pl-9 text-sm focus:outline-none focus:ring-2 focus:ring-focus"
         value={term}
         onChange={(event) => {
@@ -140,7 +141,12 @@ export function InvestorSearch() {
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={() => openHit(hit)}
               >
-                <p className="text-sm font-medium">{hit.name}</p>
+                <p className="flex items-center gap-2 text-sm font-medium">
+                  <span>{hit.name}</span>
+                  {hit.orderId !== null && (
+                    <span className="rounded-full bg-line px-2 py-0.5 text-xs text-muted">Order #{hit.orderId}</span>
+                  )}
+                </p>
                 <p className="text-xs text-muted">
                   {[hit.phone, hit.email].filter(Boolean).join(' · ')}
                 </p>

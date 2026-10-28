@@ -1,5 +1,5 @@
 import 'server-only';
-import { addMonths, startOfMonth } from '@/lib/filters/dates';
+import { addMonths, startOfMonth, type DateRange } from '@/lib/filters/dates';
 import type { Filters } from '@/lib/filters/schema';
 import type { Bucket } from '@/lib/dashboard/types';
 import { dhakaTs } from '@/lib/time';
@@ -25,6 +25,11 @@ export type SalesExtras = {
 };
 
 export type InvestorsExtras = {
+  /** Registrations in the selected range, grouped in Dhaka time and split by whether they have any approved deposit. */
+  registrationsOverTime: {
+    bucket: Bucket;
+    points: { label: string; registered: number; invested: number }[];
+  };
   /** Last 12 Dhaka months including the current one; `month` is the first day of the month, YYYY-MM-DD. */
   registrationsVsFirst: { month: string; registered: number; firstInvestments: number }[];
 };
@@ -116,17 +121,57 @@ export async function loadSalesExtras(q: QueryFn, f: Filters, _now: Date): Promi
 
 // ------------------------------------------------------------------ registrations vs first investments
 
+async function registrationsSeries(
+  q: QueryFn,
+  range: DateRange,
+  bucket: Bucket,
+): Promise<InvestorsExtras['registrationsOverTime']> {
+  const p = new Params();
+  const { start, end } = utcBounds(range);
+  const startParam = p.add(start);
+  const endParam = p.add(end);
+  const rows = await q(
+    `WITH fd AS (
+  SELECT o."userId", MIN(d."date") AS first_dep
+  FROM deposits d
+  JOIN "order" o ON o.id = d."orderId" AND o."deletedAt" IS NULL
+  WHERE d."deletedAt" IS NULL AND d.status::text = 'approved'
+  GROUP BY o."userId"
+)
+SELECT to_char(date_trunc('${bucket}', u."createdAt" + interval '6 hours'), 'YYYY-MM-DD') AS label,
+  COUNT(*)::int AS registered,
+  COUNT(fd."userId")::int AS invested
+FROM "user" u LEFT JOIN fd ON fd."userId" = u.id
+WHERE u."deletedAt" IS NULL AND u."userType"::text = 'investor'
+  AND u."createdAt" >= ${startParam}::timestamp AND u."createdAt" < ${endParam}::timestamp
+GROUP BY 1 ORDER BY 1`,
+    p.values,
+  );
+  const byLabel = new Map(
+    rows.map((row) => [String(row.label), { registered: num(row.registered), invested: num(row.invested) }]),
+  );
+  return {
+    bucket,
+    points: bucketLabels(range, bucket).map((label) => {
+      const row = byLabel.get(label);
+      return { label, registered: row?.registered ?? 0, invested: row?.invested ?? 0 };
+    }),
+  };
+}
+
 /**
  * Last 12 Dhaka months (current included, up to today): investors registered per month, and investors whose first-ever
  * approved deposit falls in that month. Investors only; no dashboard filters. A registration and a first investment of
  * the same person can fall in different months, so the two series are not a cohort funnel.
  */
-export async function loadInvestorsExtras(q: QueryFn, today: string): Promise<InvestorsExtras> {
+export async function loadInvestorsExtras(q: QueryFn, today: string, range: DateRange): Promise<InvestorsExtras> {
   const first = startOfMonth(addMonths(today, -11));
   const { start, end } = utcBounds({ from: first, to: today });
   const regP = new Params();
   const firstP = new Params();
-  const [regs, firsts] = await Promise.all([
+  const bucket = bucketFor(range);
+  const [registrationsOverTime, regs, firsts] = await Promise.all([
+    registrationsSeries(q, range, bucket),
     q(
       `SELECT ${bucketOf('month', 'u."createdAt"')} AS month, COUNT(*)::int AS n FROM "user" u
 WHERE u."deletedAt" IS NULL AND u."userType"::text = 'investor'
@@ -146,6 +191,7 @@ WHERE u."deletedAt" IS NULL AND u."userType"::text = 'investor'
   const regBy = new Map(regs.map((r) => [String(r.month), num(r.n)]));
   const firstBy = new Map(firsts.map((r) => [String(r.month), num(r.n)]));
   return {
+    registrationsOverTime,
     registrationsVsFirst: Array.from({ length: 12 }, (_, i) => {
       const month = addMonths(first, i);
       return { month, registered: regBy.get(month) ?? 0, firstInvestments: firstBy.get(month) ?? 0 };

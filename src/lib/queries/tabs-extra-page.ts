@@ -1,6 +1,7 @@
 import 'server-only';
 import { unstable_cache } from 'next/cache';
 import { querySource } from '@/lib/db/source';
+import type { DateRange } from '@/lib/filters/dates';
 import type { Filters } from '@/lib/filters/schema';
 import type { Row } from './sql-filters';
 import { loadInvestorsExtras, loadSalesExtras, type InvestorsExtras, type SalesExtras } from './tabs-extra';
@@ -14,7 +15,11 @@ export function getSalesExtras(filters: Filters, today: string): Promise<SalesEx
   })();
 }
 
-/** Not filtered: the last 12 months up to `today`. */
-export function getInvestorsExtras(today: string): Promise<InvestorsExtras> {
-  return unstable_cache(() => loadInvestorsExtras(query, today), ['investors-extras', today], { revalidate: 60 })();
+/** Snapshot series plus registrations in the selected range. */
+export function getInvestorsExtras(today: string, range: DateRange): Promise<InvestorsExtras> {
+  return unstable_cache(
+    () => loadInvestorsExtras(query, today, range),
+    ['investors-extras', today, range.from, range.to],
+    { revalidate: 60 },
+  )();
 }

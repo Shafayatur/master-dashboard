@@ -84,19 +84,30 @@ export function bucketLabels(r: DateRange, bucket: Bucket): string[] {
   return out;
 }
 
-async function salesByBucket(q: QueryFn, f: Filters, r: DateRange, bucket: Bucket): Promise<Map<string, number>> {
+interface SalesBucketValue {
+  value: number;
+  reinvest: number;
+}
+
+async function salesByBucket(q: QueryFn, f: Filters, r: DateRange, bucket: Bucket): Promise<Map<string, SalesBucketValue>> {
   const p = new Params();
   const b = salesBase(f, r, p);
   const rows = await q(
     `WITH ${b.cte}
-SELECT to_char(date_trunc('${bucket}', ${dhakaTs('dep_date')}), 'YYYY-MM-DD') AS label, SUM(amount)::float8 AS value
+SELECT to_char(date_trunc('${bucket}', ${dhakaTs('dep_date')}), 'YYYY-MM-DD') AS label,
+  SUM(amount)::float8 AS value,
+  COALESCE(SUM(amount) FILTER (WHERE payment_method = 'reinvest'), 0)::float8 AS reinvest
 FROM base GROUP BY 1 ORDER BY 1`,
     p.values,
   );
-  return new Map(rows.map((x) => [String(x.label), num(x.value)]));
+  return new Map(rows.map((x) => [String(x.label), { value: num(x.value), reinvest: num(x.reinvest) }]));
 }
 
-export async function salesSeries(q: QueryFn, f: Filters): Promise<{ bucket: Bucket; points: SeriesPoint[] }> {
+interface SalesSeriesDataPoint extends SeriesPoint {
+  reinvest: number;
+}
+
+async function salesSeriesData(q: QueryFn, f: Filters): Promise<{ bucket: Bucket; points: SalesSeriesDataPoint[] }> {
   const bucket = bucketFor(f.range);
   const [cur, cmp] = await Promise.all([
     salesByBucket(q, f, f.range, bucket),
@@ -104,11 +115,34 @@ export async function salesSeries(q: QueryFn, f: Filters): Promise<{ bucket: Buc
   ]);
   const labels = bucketLabels(f.range, bucket);
   const cmpLabels = f.compareRange ? bucketLabels(f.compareRange, bucket) : [];
-  const points = labels.map((label, i): SeriesPoint => {
+  const points = labels.map((label, i): SalesSeriesDataPoint => {
+    const current = cur.get(label);
     const cl = cmpLabels[i];
-    return { label, value: cur.get(label) ?? 0, compare: cmp && cl ? (cmp.get(cl) ?? 0) : null, compareLabel: cl ?? null };
+    return {
+      label,
+      value: current?.value ?? 0,
+      reinvest: current?.reinvest ?? 0,
+      compare: cmp && cl ? (cmp.get(cl)?.value ?? 0) : null,
+      compareLabel: cl ?? null,
+    };
   });
   return { bucket, points };
+}
+
+export async function salesSeries(q: QueryFn, f: Filters): Promise<{ bucket: Bucket; points: SeriesPoint[] }> {
+  const series = await salesSeriesData(q, f);
+  return { bucket: series.bucket, points: series.points.map(({ label, value, compare, compareLabel }) => ({ label, value, compare, compareLabel })) };
+}
+
+export async function salesInvestmentSeries(
+  q: QueryFn,
+  f: Filters,
+): Promise<{ bucket: Bucket; points: { label: string; value: number; reinvest: number }[] }> {
+  const series = await salesSeriesData(q, f);
+  return {
+    bucket: series.bucket,
+    points: series.points.map(({ label, value, reinvest }) => ({ label, value, reinvest })),
+  };
 }
 
 // ------------------------------------------------------------------ attention (always "right now", not filtered)

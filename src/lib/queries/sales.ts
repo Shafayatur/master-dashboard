@@ -1,8 +1,9 @@
 import 'server-only';
 import type { DateRange } from '@/lib/filters/dates';
 import type { Filters } from '@/lib/filters/schema';
+import type { Bucket } from '@/lib/dashboard/types';
 import { Params, salesBase, type QueryFn } from './sql-filters';
-import { salesKpis } from './overview';
+import { salesInvestmentSeries, salesKpis } from './overview';
 
 export type SalesDim = 'product' | 'category' | 'tenure' | 'returnType' | 'paymentMethod' | 'depositStatus';
 
@@ -76,13 +77,18 @@ export interface SalesData {
   generatedAt: string;
   range: DateRange;
   total: { sales: number; deposits: number; uniqueInvestors: number; newInvestors: number; oldInvestors: number };
+  series: { bucket: Bucket; points: { label: string; value: number; reinvest: number }[] };
   breakdowns: Record<SalesDim, BreakdownRow[]>;
 }
 
 const DIM_KEYS = Object.keys(DIMS) as SalesDim[];
 
 export async function loadSales(q: QueryFn, f: Filters, now: Date): Promise<SalesData> {
-  const [total, ...lists] = await Promise.all([salesKpis(q, f, f.range), ...DIM_KEYS.map((k) => salesBreakdown(q, f, f.range, k))]);
+  const [total, series, ...lists] = await Promise.all([
+    salesKpis(q, f, f.range),
+    salesInvestmentSeries(q, f),
+    ...DIM_KEYS.map((k) => salesBreakdown(q, f, f.range, k)),
+  ]);
   return {
     generatedAt: now.toISOString(),
     range: f.range,
@@ -92,6 +98,10 @@ export async function loadSales(q: QueryFn, f: Filters, now: Date): Promise<Sale
       uniqueInvestors: total.uniqueInvestors,
       newInvestors: total.newInvestors,
       oldInvestors: total.oldInvestors,
+    },
+    series: {
+      bucket: series.bucket,
+      points: series.points,
     },
     breakdowns: Object.fromEntries(DIM_KEYS.map((k, i) => [k, lists[i]])) as Record<SalesDim, BreakdownRow[]>,
   };

@@ -5,6 +5,7 @@ import { ChartCard } from '@/components/charts/chart-card';
 import { DonutChart, DonutLegend } from '@/components/charts/donut-chart';
 import { KpiCard } from '@/components/charts/kpi-card';
 import { buildInvestorInsights } from '@/lib/dashboard/investor-insights';
+import { formatBucketLabel } from '@/lib/format/labels';
 import { formatInt, formatMoney, type MoneyUnit } from '@/lib/format/money';
 import type { InvestorsData, SegmentKey, TierRow } from '@/lib/queries/investors';
 import type { InvestorsExtras } from '@/lib/queries/tabs-extra';
@@ -59,6 +60,18 @@ export function InvestorsView({ data, extras, unit }: Props) {
   }));
   const paretoNote = `Top 10 investors hold ${data.concentration.top10Share.toFixed(0)}% of lifetime investment; the top 20% hold ${data.concentration.top20PctShare.toFixed(0)}%.`;
   const registrationLabels = extras.registrationsVsFirst.map((row) => row.month);
+  const registrationPoints = extras.registrationsOverTime.points;
+  const periodRegistered = registrationPoints.reduce((sum, point) => sum + point.registered, 0);
+  const periodInvested = registrationPoints.reduce((sum, point) => sum + point.invested, 0);
+  const investedPct = periodRegistered > 0 ? Math.round((periodInvested / periodRegistered) * 100) : 0;
+  const registrationItems = registrationPoints.map((point) => ({
+    label: formatBucketLabel(point.label, extras.registrationsOverTime.bucket),
+    values: [
+      { value: point.invested, color: 'emerald-500', name: 'Invested since' },
+      { value: point.registered - point.invested, color: 'rgb(100 116 139)', name: 'Not yet invested' },
+    ],
+  }));
+  const registrationNote = `${formatInt(periodRegistered)} registered in the selected period - ${investedPct}% have invested. Uses the date range; other cards on this tab are snapshots.`;
 
   const kpis = [
     { label: 'Registered investors', value: registered, icon: UserRound, tone: 'blue' as const },
@@ -108,6 +121,20 @@ export function InvestorsView({ data, extras, unit }: Props) {
               <BarChart items={tierItems} unit={unit} kind="int" height={250} />
             </ChartCard>
           </div>
+
+          <ChartCard title="New registrations" subtitle={registrationNote}>
+            <div className="mb-2 flex flex-wrap gap-4 text-xs text-muted">
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden />
+                Invested since
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-slate-500" aria-hidden />
+                Not yet invested
+              </span>
+            </div>
+            <BarChart items={registrationItems} unit={unit} kind="int" height={260} />
+          </ChartCard>
 
           <ChartCard title="Registrations vs first investments">
             <AreaChart

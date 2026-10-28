@@ -75,7 +75,75 @@ describe('loadSales', () => {
   it('returns the total and every breakdown as plain JSON', async () => {
     const d = await loadSales(q, filters(), new Date('2026-10-14T00:00:00Z'));
     expect(d.total.sales).toBe(34000);
+    expect(d.series).toEqual({
+      bucket: 'day',
+      points: [
+        { label: '2026-10-01', value: 0, reinvest: 0 },
+        { label: '2026-10-02', value: 0, reinvest: 0 },
+        { label: '2026-10-03', value: 10000, reinvest: 0 },
+        { label: '2026-10-04', value: 0, reinvest: 0 },
+        { label: '2026-10-05', value: 20000, reinvest: 20000 },
+        { label: '2026-10-06', value: 4000, reinvest: 0 },
+        { label: '2026-10-07', value: 0, reinvest: 0 },
+        { label: '2026-10-08', value: 0, reinvest: 0 },
+        { label: '2026-10-09', value: 0, reinvest: 0 },
+        { label: '2026-10-10', value: 0, reinvest: 0 },
+      ],
+    });
     expect(Object.keys(d.breakdowns).sort()).toEqual(['category', 'depositStatus', 'paymentMethod', 'product', 'returnType', 'tenure']);
     expect(JSON.parse(JSON.stringify(d))).toEqual(d);
+  });
+
+  it('zero-fills daily buckets and assigns 30 Sep 19:00 UTC to 1 Oct Dhaka', async () => {
+    await db.query(`
+      INSERT INTO deposits (id, "date", amount, "paymentMethod", status, "orderId")
+      VALUES (6, '2026-09-30 19:00', 2500, 'cash', 'approved', 2)
+    `);
+    try {
+      const d = await loadSales(q, filters(), new Date('2026-10-14T00:00:00Z'));
+      expect(d.series.points.map((point) => point.value)).toEqual([
+        2500, 0, 10000, 0, 20000, 4000, 0, 0, 0, 0,
+      ]);
+      expect(d.series.points.map((point) => point.reinvest)).toEqual([
+        0, 0, 0, 0, 20000, 0, 0, 0, 0, 0,
+      ]);
+      expect(d.series.points.reduce((sum, point) => sum + point.value, 0)).toBe(d.total.sales);
+    } finally {
+      await db.query('DELETE FROM deposits WHERE id = 6');
+    }
+  });
+
+  it('uses monthly buckets for ranges longer than 92 days', async () => {
+    const f = parseFilters(
+      new URLSearchParams('p=custom&from=2026-09-01&to=2026-12-15&cmp=none'),
+      '2026-10-14',
+    );
+    const d = await loadSales(q, f, new Date('2026-10-14T00:00:00Z'));
+    expect(d.series).toEqual({
+      bucket: 'month',
+      points: [
+        { label: '2026-09-01', value: 0, reinvest: 0 },
+        { label: '2026-10-01', value: 34000, reinvest: 20000 },
+        { label: '2026-11-01', value: 0, reinvest: 0 },
+        { label: '2026-12-01', value: 0, reinvest: 0 },
+      ],
+    });
+    expect(d.series.points.reduce((sum, point) => sum + point.value, 0)).toBe(d.total.sales);
+  });
+
+  it('honors selected statuses and splits reinvest from other methods', async () => {
+    const f = filters('ds=approved,pending');
+    const d = await loadSales(q, f, new Date('2026-10-14T00:00:00Z'));
+    expect(d.series.points.find((point) => point.label === '2026-10-05')).toEqual({
+      label: '2026-10-05',
+      value: 20000,
+      reinvest: 20000,
+    });
+    expect(d.series.points.find((point) => point.label === '2026-10-07')).toEqual({
+      label: '2026-10-07',
+      value: 3000,
+      reinvest: 0,
+    });
+    expect(d.series.points.reduce((sum, point) => sum + point.value, 0)).toBe(d.total.sales);
   });
 });
