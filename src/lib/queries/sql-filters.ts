@@ -50,7 +50,7 @@ export function productPredicates(
   return out;
 }
 
-const FIRST_DEPOSIT = `first_dep AS (
+const FIRST_DEPOSIT = (materialized: boolean): string => `first_dep AS ${materialized ? 'MATERIALIZED ' : ''}(
   SELECT o2."userId", MIN(d2."date") AS first_dep
   FROM deposits d2 JOIN "order" o2 ON o2.id = d2."orderId"
   WHERE d2."deletedAt" IS NULL AND o2."deletedAt" IS NULL AND d2.status::text = 'approved'
@@ -65,15 +65,22 @@ export interface SalesBase {
   e: string;
 }
 
+export interface SalesBaseOptions {
+  materializeFirstDeposit?: boolean;
+  /** Omit for caller-managed FULL JOINs, avoiding misestimated nested-loop CTE rescans. */
+  joinFirstDeposit?: boolean;
+}
+
 /**
  * Deposits in a Dhaka date range, joined to order, product and investor, with every dashboard filter applied.
  * `plain` = approved deposits only and no other filter (used for the monthly target).
- * Columns of `base`: dep_id, amount, payment_method, "orderId", dep_date, "userId", first_dep.
+ * Columns of `base`: dep_id, amount, payment_method, "orderId", dep_date and "userId"; `first_dep` is optional.
  */
-export function salesBase(f: Filters, r: DateRange, p: Params, plain = false): SalesBase {
+export function salesBase(f: Filters, r: DateRange, p: Params, plain = false, options: SalesBaseOptions = {}): SalesBase {
   const { start, end } = utcBounds(r);
   const s = `${p.add(start)}::timestamp`;
   const e = `${p.add(end)}::timestamp`;
+  const joinFirstDeposit = options.joinFirstDeposit ?? true;
   const preds = [`d."deletedAt" IS NULL`, `d."date" >= ${s}`, `d."date" < ${e}`];
   if (plain) {
     preds.push(`d.status::text = 'approved'`);
@@ -82,17 +89,17 @@ export function salesBase(f: Filters, r: DateRange, p: Params, plain = false): S
     if (f.paymentMethod.length) preds.push(`d."paymentMethod"::text = ANY(${p.add(f.paymentMethod)}::text[])`);
     if (f.excludeReinvest) preds.push(`d."paymentMethod"::text <> 'reinvest'`);
     preds.push(...productPredicates(f, p));
-    if (f.investorKind === 'new') preds.push(`fd.first_dep >= ${s} AND fd.first_dep < ${e}`);
-    if (f.investorKind === 'old') preds.push(`fd.first_dep < ${s}`);
+    if (joinFirstDeposit && f.investorKind === 'new') preds.push(`fd.first_dep >= ${s} AND fd.first_dep < ${e}`);
+    if (joinFirstDeposit && f.investorKind === 'old') preds.push(`fd.first_dep < ${s}`);
   }
-  const cte = `${FIRST_DEPOSIT},
+  const cte = `${FIRST_DEPOSIT(options.materializeFirstDeposit || (!plain && f.investorKind !== 'all'))},
 base AS (
-  SELECT d.id AS dep_id, d.amount, d."paymentMethod"::text AS payment_method, d."orderId", d."date" AS dep_date, o."userId", fd.first_dep
+  SELECT d.id AS dep_id, d.amount, d."paymentMethod"::text AS payment_method, d."orderId", d."date" AS dep_date, o."userId"${joinFirstDeposit ? ', fd.first_dep' : ''}
   FROM deposits d
   JOIN "order" o ON o.id = d."orderId" AND o."deletedAt" IS NULL
   JOIN products p ON p.id = o."productId"
   ${investorJoin('o."userId"')}
-  LEFT JOIN first_dep fd ON fd."userId" = o."userId"
+  ${joinFirstDeposit ? 'LEFT JOIN first_dep fd ON fd."userId" = o."userId"' : ''}
   WHERE ${preds.join('\n    AND ')}
 )`;
   return { cte, s, e };

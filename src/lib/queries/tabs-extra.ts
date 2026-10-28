@@ -86,15 +86,23 @@ export function resolveBookingAnchor(value: string | undefined, range: DateRange
  */
 async function newVsReturning(q: QueryFn, f: Filters, bucket: Bucket): Promise<SalesExtras['newVsReturning']> {
   const p = new Params();
-  const b = salesBase(f, f.range, p);
-  const depBucket = bucketOf(bucket, 'dep_date');
-  const firstBucket = bucketOf(bucket, 'first_dep');
+  const b = salesBase(f, f.range, p, false, {
+    materializeFirstDeposit: true,
+    joinFirstDeposit: false,
+  });
+  const depBucket = bucketOf(bucket, 'b.dep_date');
+  const firstBucket = bucketOf(bucket, 'fd.first_dep');
+  const investorKind = f.investorKind === 'new'
+    ? `fd.first_dep >= ${b.s} AND fd.first_dep < ${b.e}`
+    : f.investorKind === 'old'
+      ? `fd.first_dep < ${b.s}`
+      : 'TRUE';
   const rows = await q(
     `WITH ${b.cte}
 SELECT ${depBucket} AS label,
-  COUNT(DISTINCT "userId") FILTER (WHERE ${firstBucket} = ${depBucket})::int AS new_investors,
-  COUNT(DISTINCT "userId") FILTER (WHERE ${firstBucket} < ${depBucket})::int AS returning_investors
-FROM base GROUP BY 1`,
+  COUNT(DISTINCT b."userId") FILTER (WHERE b.dep_id IS NOT NULL AND (${investorKind}) AND ${firstBucket} = ${depBucket})::int AS new_investors,
+  COUNT(DISTINCT b."userId") FILTER (WHERE b.dep_id IS NOT NULL AND (${investorKind}) AND ${firstBucket} < ${depBucket})::int AS returning_investors
+FROM base b FULL OUTER JOIN first_dep fd ON fd."userId" = b."userId" GROUP BY 1`,
     p.values,
   );
   const byLabel = new Map(rows.map((r) => [String(r.label), r]));
