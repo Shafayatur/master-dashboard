@@ -4,6 +4,7 @@ interface Props {
   rows: string[];
   cols: string[];
   matrix: number[][];
+  cellLabels?: string[][];
   unit?: MoneyUnit;
   kind?: 'int' | 'money';
 }
@@ -13,7 +14,7 @@ const HEAD = 22;
 const clean = (v: number | undefined): number => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0);
 
 /** Emerald intensity grid (rows x columns). Scrolls sideways on small screens. */
-export function Heatmap({ rows, cols, matrix, unit = 'm', kind = 'int' }: Props) {
+export function Heatmap({ rows, cols, matrix, cellLabels, unit = 'm', kind = 'int' }: Props) {
   const grid = rows.map((_, r) => cols.map((_, c) => clean(matrix[r]?.[c])));
   const max = Math.max(0, ...grid.flat());
   if (rows.length === 0 || cols.length === 0 || max === 0) {
@@ -68,6 +69,18 @@ export function Heatmap({ rows, cols, matrix, unit = 'm', kind = 'int' }: Props)
                     >
                       <title>{`${row}, ${col}: ${fmt(v)}`}</title>
                     </rect>
+                    {cellLabels?.[r]?.[c] && (
+                      <text
+                        x={cx + 4}
+                        y={cy + 11}
+                        fontSize="10"
+                        fill="rgb(var(--muted))"
+                        pointerEvents="none"
+                        className="text-[10px]"
+                      >
+                        {cellLabels[r]?.[c]}
+                      </text>
+                    )}
                     {!dense && v > 0 && (
                       <text x={cx + cw / 2} y={cy + ch / 2 + 3.5} textAnchor="middle" fontSize="10" pointerEvents="none" fill={alpha > 0.5 ? 'rgb(var(--canvas))' : 'rgb(var(--fg))'}>
                         {fmt(v)}

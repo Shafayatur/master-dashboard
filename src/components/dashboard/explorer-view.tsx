@@ -57,6 +57,30 @@ export function ExplorerView({ data, params, searchParams }: Props) {
   const exportQuery = new URLSearchParams(currentQuery);
   exportQuery.delete('page');
   const exportUrl = `/api/export/explorer?${exportQuery.toString()}`;
+  const chips = [
+    ...params.segments.map((value) => ({
+      key: 'seg',
+      value,
+      label: `Segment: ${value.replaceAll('_', ' ')}`,
+    })),
+    ...params.filters.products.map((value) => ({ key: 'prod', value: String(value), label: `Product: ${value}` })),
+    ...params.filters.categories.map((value) => ({ key: 'cat', value: String(value), label: `Category: ${value}` })),
+    ...params.filters.tenures.map((value) => ({ key: 'ten', value: String(value), label: `Tenure: ${value} months` })),
+    ...params.filters.returnTypes.map((value) => ({ key: 'rt', value, label: `Return type: ${value}` })),
+    ...(params.filters.shariah !== 'all'
+      ? [{ key: 'sh', value: params.filters.shariah, label: `Shariah: ${params.filters.shariah === 'yes' ? 'Yes' : 'No'}` }]
+      : []),
+    ...params.filters.paymentMethod.map((value) => ({
+      key: 'pm',
+      value,
+      label: `Payment method: ${value.replaceAll('_', ' ')}`,
+    })),
+  ];
+  const removeChip = (key: string, value: string) => {
+    const remaining = (currentQuery.get(key) ?? '').split(',').filter((item) => item !== value);
+    return href({ [key]: remaining.join(',') });
+  };
+  const clearDrilldownFilters = href({ seg: '', prod: '', cat: '', ten: '', rt: '', sh: '', pm: '' });
   const pages = Math.max(1, Math.ceil(data.total / data.pageSize));
   const from = data.total > 0 ? (data.page - 1) * data.pageSize + 1 : 0;
   const to = Math.min(data.page * data.pageSize, data.total);
@@ -89,6 +113,24 @@ export function ExplorerView({ data, params, searchParams }: Props) {
           </Link>
         ))}
       </nav>
+
+      {chips.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2" aria-label="Active drill-down filters">
+          {chips.map((chip) => (
+            <Link
+              key={`${chip.key}-${chip.value}`}
+              href={removeChip(chip.key, chip.value)}
+              aria-label={`Remove ${chip.label} filter`}
+              className="inline-flex items-center gap-1 rounded-full border border-line bg-surface px-2.5 py-1 text-xs text-muted hover:text-fg"
+            >
+              {chip.label}<span aria-hidden>×</span>
+            </Link>
+          ))}
+          <Link href={clearDrilldownFilters} className="px-1 text-xs text-muted underline hover:text-fg">
+            Clear filters
+          </Link>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-end justify-between gap-3">
         <form method="get" action="/explorer" className="flex flex-wrap items-end gap-2">

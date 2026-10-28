@@ -3,15 +3,16 @@ import type { Filters } from '@/lib/filters/schema';
 import { PRESET_LABELS } from '@/lib/filters/dates';
 import { formatRange } from '@/lib/filters/format';
 import { formatInt, formatMoney, type MoneyUnit } from '@/lib/format/money';
+import { formatBucketLabel } from '@/lib/format/labels';
 import type { SalesData, BreakdownRow } from '@/lib/queries/sales';
 import type { SalesExtras } from '@/lib/queries/tabs-extra';
 import { CHART_COLORS } from '@/components/charts/chart-colors';
 import { ChartCard } from '@/components/charts/chart-card';
 import { DonutChart, DonutLegend } from '@/components/charts/donut-chart';
 import { HBarList } from '@/components/charts/hbar-list';
-import { Heatmap } from '@/components/charts/heatmap';
 import { KpiCard } from '@/components/charts/kpi-card';
 import { BarChart } from './bar-chart';
+import { BookingActivityPanel } from './booking-activity-panel';
 import { CountUp } from './count-up';
 import { PageTools } from './page-tools';
 
@@ -20,6 +21,8 @@ interface Props {
   extras: SalesExtras;
   filters: Filters;
   unit: MoneyUnit;
+  bookingAnchor: string;
+  search: string;
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -93,7 +96,7 @@ function BreakdownChart({
   );
 }
 
-export function SalesView({ data, extras, filters, unit }: Props) {
+export function SalesView({ data, extras, filters, unit, bookingAnchor, search }: Props) {
   const newVsReturningItems = extras.newVsReturning.map((row) => ({
     label: bucketLabel(row.label, extras.bucket),
     values: [
@@ -110,6 +113,17 @@ export function SalesView({ data, extras, filters, unit }: Props) {
   const statusRows = (['approved', 'pending', 'rejected'] as const).map(
     (key) => data.breakdowns.depositStatus.find((row) => row.key === key) ?? { key, label: key, value: 0, deposits: 0, investors: 0, share: 0 },
   );
+  const seriesTotal = data.series.points.reduce((sum, point) => sum + point.value, 0);
+  const seriesAverage = data.series.points.length > 0 ? seriesTotal / data.series.points.length : 0;
+  const bucketName = data.series.bucket === 'month' ? 'month' : 'day';
+  const investmentItems = data.series.points.map((point) => ({
+    label: formatBucketLabel(point.label, data.series.bucket),
+    values: [
+      { value: point.value - point.reinvest, color: 'emerald-500', name: 'Other payment methods' },
+      { value: point.reinvest, color: 'amber-500', name: 'Reinvest' },
+    ],
+  }));
+  const activity = extras.bookingActivity;
   const cards = [
     {
       label: 'Investment value',
@@ -163,6 +177,23 @@ export function SalesView({ data, extras, filters, unit }: Props) {
         ))}
       </div>
 
+      <ChartCard
+        title={`Investment by ${bucketName}`}
+        subtitle={`Total ${formatMoney(seriesTotal, unit)} - average ${formatMoney(seriesAverage, unit)} per ${bucketName}`}
+      >
+        <div className="mb-2 flex flex-wrap gap-4 text-xs text-muted">
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden />
+            Other payment methods
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-amber-500" aria-hidden />
+            Reinvest
+          </span>
+        </div>
+        <BarChart items={investmentItems} unit={unit} kind="money" height={260} />
+      </ChartCard>
+
       <ChartCard title="New vs returning investors">
         <BarChart
           items={newVsReturningItems}
@@ -196,16 +227,7 @@ export function SalesView({ data, extras, filters, unit }: Props) {
         <ChartCard title="Deposits by weekday">
           <HBarList items={weekdayItems} kind="money" unit={unit} color={CHART_COLORS[0]} />
         </ChartCard>
-        <ChartCard
-          title="Booking activity by weekday and hour"
-          subtitle="Bookings, Dhaka time. Use it to time campaigns."
-        >
-          <Heatmap
-            rows={extras.bookingHeat.rows}
-            cols={extras.bookingHeat.cols}
-            matrix={extras.bookingHeat.matrix}
-          />
-        </ChartCard>
+        <BookingActivityPanel activity={activity} bookingAnchor={bookingAnchor} search={search} />
       </div>
     </div>
   );

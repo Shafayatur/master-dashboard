@@ -22,11 +22,16 @@ beforeAll(async () => {
       (2,'Karim Rahman','01711000002','karim@example.com','2026-01-06','investor',TRUE,TRUE),
       (3,'Salma Akter','01711000003','salma@example.com','2026-02-01','investor',FALSE,FALSE),
       (4,'Rafi 100%','01711000004','rafi@example.com','2026-02-02','investor',FALSE,FALSE),
-      (5,'Staff Rahman','01711000005','staff@example.com','2026-02-03','internal-staff',TRUE,TRUE);
+      (5,'Staff Rahman','01711000005','staff@example.com','2026-02-03','internal-staff',TRUE,TRUE),
+      (12,'Investor Twelve','01711000012','investor12@example.com','2026-02-04','investor',TRUE,TRUE);
     INSERT INTO products (id, name, "productDuration") VALUES (1,'Dairy A','6 Months'), (2,'Poultry B','12 Months');
     INSERT INTO "order" (id, status, "totalAmount", "investmentDate", "createdAt", "userId", "productId") VALUES
       (1,'invested',10000,'2026-04-20','2026-04-19',1,1), (2,'closed',5000,'2025-08-01','2025-07-30',1,2),
       (3,'closed',8000,'2026-03-01','2026-02-28',2,1), (4,'cancelled',3000,'2026-09-01','2026-09-01',4,1);
+    INSERT INTO "order" (id, status, "totalAmount", "investmentDate", "createdAt", "userId", "productId", "deletedAt") VALUES
+      (12,'cancelled',3000,'2026-09-01','2026-09-01',3,1,NULL),
+      (13,'closed',3000,'2026-09-01','2026-09-01',3,1,'2026-09-02'),
+      (15,'closed',3000,'2026-09-01','2026-09-01',5,1,NULL);
     INSERT INTO return_schedules (id, "orderId", "paymentDate") VALUES (1,1,'2026-10-20');
     INSERT INTO deposits (id, "date", amount, "paymentMethod", status, "orderId") VALUES
       (1,'2026-04-20',10000,'bank_deposit','approved',1), (2,'2025-08-01',5000,'reinvest','approved',2), (3,'2026-04-21',700,'bank_deposit','pending',1),
@@ -46,6 +51,21 @@ describe('searchInvestors', () => {
     expect((await searchInvestors(q, 'salma@')).map((h) => h.userId)).toEqual([3]);
     expect((await searchInvestors(q, '3')).map((h) => h.userId)).toEqual([]); // under the minimum length
     expect((await searchInvestors(q, '03')).map((h) => h.userId)).toEqual([3]);
+  });
+  it('finds order ids, normalises a leading hash, and ranks order matches first', async () => {
+    for (const term of ['12', '#12']) {
+      expect(await searchInvestors(q, term)).toEqual([
+        { userId: 3, name: 'Salma Akter', phone: '01711000003', email: 'salma@example.com', orderId: 12 },
+        { userId: 12, name: 'Investor Twelve', phone: '01711000012', email: 'investor12@example.com', orderId: null },
+      ]);
+    }
+    expect(await searchInvestors(q, '2')).toEqual([]);
+    expect(await searchInvestors(q, '99')).toEqual([]);
+  });
+  it('matches cancelled orders but ignores soft-deleted orders and staff orders', async () => {
+    expect((await searchInvestors(q, '12')).find((hit) => hit.userId === 3)?.orderId).toBe(12);
+    expect(await searchInvestors(q, '13')).toEqual([]);
+    expect(await searchInvestors(q, '15')).toEqual([]);
   });
   it('puts names that start with the term first', async () => {
     expect((await searchInvestors(q, 'karim')).map((h) => h.userId)).toEqual([2]);

@@ -32,7 +32,10 @@ export const investorJoin = (userKey: string, alias = 'u'): string =>
   `JOIN "user" ${alias} ON ${alias}.id = ${userKey} AND ${alias}."deletedAt" IS NULL AND ${alias}."userType"::text = 'investor'`;
 
 /** Filters that describe the product/order (aliases: o = "order", p = products). */
-export function productPredicates(f: Filters, p: Params): string[] {
+export function productPredicates(
+  f: Pick<Filters, 'products' | 'categories' | 'tenures' | 'returnTypes' | 'shariah' | 'orderStatus'>,
+  p: Params,
+): string[] {
   const out: string[] = [];
   if (f.products.length) out.push(`o."productId" = ANY(${p.add(f.products)}::int[])`);
   if (f.categories.length) {
@@ -65,7 +68,7 @@ export interface SalesBase {
 /**
  * Deposits in a Dhaka date range, joined to order, product and investor, with every dashboard filter applied.
  * `plain` = approved deposits only and no other filter (used for the monthly target).
- * Columns of `base`: dep_id, amount, "orderId", dep_date, "userId", first_dep.
+ * Columns of `base`: dep_id, amount, payment_method, "orderId", dep_date, "userId", first_dep.
  */
 export function salesBase(f: Filters, r: DateRange, p: Params, plain = false): SalesBase {
   const { start, end } = utcBounds(r);
@@ -84,7 +87,7 @@ export function salesBase(f: Filters, r: DateRange, p: Params, plain = false): S
   }
   const cte = `${FIRST_DEPOSIT},
 base AS (
-  SELECT d.id AS dep_id, d.amount, d."orderId", d."date" AS dep_date, o."userId", fd.first_dep
+  SELECT d.id AS dep_id, d.amount, d."paymentMethod"::text AS payment_method, d."orderId", d."date" AS dep_date, o."userId", fd.first_dep
   FROM deposits d
   JOIN "order" o ON o.id = d."orderId" AND o."deletedAt" IS NULL
   JOIN products p ON p.id = o."productId"

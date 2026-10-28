@@ -7,6 +7,7 @@ export interface InvestorHit {
   name: string;
   phone: string;
   email: string;
+  orderId: number | null;
 }
 export interface ProfileOrder {
   orderId: number;
@@ -34,7 +35,7 @@ export interface ProfilePayout {
   amount: number;
   status: string;
 }
-export interface InvestorProfile extends InvestorHit {
+export interface InvestorProfile extends Omit<InvestorHit, 'orderId'> {
   generatedAt: string;
   registered: string;
   emailVerified: boolean;
@@ -66,17 +67,26 @@ const MAX_SEARCH_LENGTH = 64;
 export const escapeLike = (s: string): string => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 
 export async function searchInvestors(q: QueryFn, term: string, limit = 8): Promise<InvestorHit[]> {
-  const t = term.trim().slice(0, MAX_SEARCH_LENGTH);
+  const t = term.trim().slice(0, MAX_SEARCH_LENGTH).replace(/^#/, '');
   if (t.length < MIN_SEARCH_LENGTH) return [];
   const like = `%${escapeLike(t)}%`;
   const rows = await q(
-    `SELECT u.id AS user_id, COALESCE(u.name, '') AS name, COALESCE(u.phone, '') AS phone, COALESCE(u.email, '') AS email
+    `SELECT u.id AS user_id, COALESCE(u.name,'') AS name, COALESCE(u.phone,'') AS phone, COALESCE(u.email,'') AS email,
+  (SELECT ox.id FROM "order" ox WHERE ox."userId" = u.id AND ox."deletedAt" IS NULL AND ox.id::text = $2 LIMIT 1) AS order_id
 FROM "user" u
-WHERE ${INVESTOR} AND (u.name ILIKE $1 OR u.phone ILIKE $1 OR u.email ILIKE $1 OR u.id::text = $2)
-ORDER BY (u.name ILIKE $3) DESC, u.name ASC, u.id ASC LIMIT $4::int`,
+WHERE ${INVESTOR} AND (u.name ILIKE $1 OR u.phone ILIKE $1 OR u.email ILIKE $1 OR u.id::text = $2
+  OR EXISTS (SELECT 1 FROM "order" ox WHERE ox."userId" = u.id AND ox."deletedAt" IS NULL AND ox.id::text = $2))
+ORDER BY (EXISTS (SELECT 1 FROM "order" oy WHERE oy."userId" = u.id AND oy."deletedAt" IS NULL AND oy.id::text = $2)) DESC,
+  (u.name ILIKE $3) DESC, u.name ASC, u.id ASC LIMIT $4::int`,
     [like, t, `${escapeLike(t)}%`, Math.min(Math.max(limit, 1), 20)],
   );
-  return rows.map((r) => ({ userId: num(r.user_id), name: str(r.name), phone: str(r.phone), email: str(r.email) }));
+  return rows.map((r) => ({
+    userId: num(r.user_id),
+    name: str(r.name),
+    phone: str(r.phone),
+    email: str(r.email),
+    orderId: r.order_id == null ? null : num(r.order_id),
+  }));
 }
 
 const ORD = (userParam: string) => `sched AS (

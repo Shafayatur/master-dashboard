@@ -5,6 +5,7 @@ import { COMPARE_LABELS, PRESET_LABELS } from '@/lib/filters/dates';
 import { formatRange } from '@/lib/filters/format';
 import { formatInt, formatMoney, type MoneyUnit } from '@/lib/format/money';
 import { buildProjectInsights } from '@/lib/dashboard/project-insights';
+import type { ActiveProject } from '@/lib/queries/active-projects';
 import type { CompareRow, ProjectsData } from '@/lib/queries/projects';
 import { CHART_COLORS } from '@/components/charts/chart-colors';
 import { ChartCard } from '@/components/charts/chart-card';
@@ -14,11 +15,14 @@ import { KpiCard } from '@/components/charts/kpi-card';
 import { CountUp } from './count-up';
 import { PageTools } from './page-tools';
 import { ProjectScorecard } from './project-scorecard';
+import { ActiveProjectsCard } from './active-projects-card';
 
 interface Props {
   data: ProjectsData;
+  activeProjects: ActiveProject[];
   filters: Filters;
   unit: MoneyUnit;
+  searchParams: Record<string, string | string[] | undefined>;
 }
 
 const card = 'rounded-xl border border-line bg-surface p-4';
@@ -52,7 +56,7 @@ function changeHint(row: CompareRow, compare: boolean): ReactNode {
   return <span className="inline-flex rounded-full bg-line/60 px-2 py-0.5 font-medium text-muted">0.0%</span>;
 }
 
-export function ProjectsView({ data, filters, unit }: Props) {
+export function ProjectsView({ data, activeProjects, filters, unit, searchParams }: Props) {
   const insights = buildProjectInsights(data, unit);
   const preferredTenure = [...data.tenure].sort((a, b) => b.investors - a.investors || b.value - a.value)[0];
   const topProjectShare = data.scorecard[0]?.share ?? 0;
@@ -137,6 +141,7 @@ export function ProjectsView({ data, filters, unit }: Props) {
         </aside>
       </div>
 
+      <ActiveProjectsCard projects={activeProjects} unit={unit} searchParams={searchParams} />
       <ProjectScorecard rows={data.scorecard} unit={unit} />
     </div>
   );
