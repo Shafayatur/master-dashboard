@@ -10,7 +10,7 @@ import { todayDhaka } from '@/lib/time';
 
 async function Loaded({ filters, today, unit }: { filters: Filters; today: string; unit: MoneyUnit }) {
   const data = await getHome(filters, today);
-  return <CommandCenterView data={data} filters={filters} unit={unit} />;
+  return <CommandCenterView data={data} filters={filters} unit={unit} today={today} />;
 }
 
 export default async function CommandCenterPage({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {

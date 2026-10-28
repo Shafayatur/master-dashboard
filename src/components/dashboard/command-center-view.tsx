@@ -25,7 +25,8 @@ import { buildInsights, type Insight } from '@/lib/dashboard/insights';
 import type { CommandCenterData } from '@/lib/dashboard/types';
 import { COMPARE_LABELS, PRESET_LABELS } from '@/lib/filters/dates';
 import { formatRange } from '@/lib/filters/format';
-import type { Filters } from '@/lib/filters/schema';
+import { serializeFilters, type Filters } from '@/lib/filters/schema';
+import { depositSliceHref, investorSegmentHref } from '@/lib/drilldown';
 import { deltaPct, formatInt, formatMoney, type MoneyUnit } from '@/lib/format/money';
 import type { HomeData } from '@/lib/queries/home';
 import { BarChart } from './bar-chart';
@@ -261,7 +262,7 @@ function RecentActivityCard({ items, unit, nowMs }: { items: HomeData['recent'];
 // Main view
 // ---------------------------------------------------------------------------
 
-export function CommandCenterView({ data, filters, unit }: { data: HomeData; filters: Filters; unit: MoneyUnit }) {
+export function CommandCenterView({ data, filters, unit, today }: { data: HomeData; filters: Filters; unit: MoneyUnit; today: string }) {
   const { current: c, previous: p } = data;
   const insights = buildInsights(data, unit);
   const d = (cur: number, prev: number | undefined) => (p ? deltaPct(cur, prev ?? 0) : undefined);
@@ -272,8 +273,19 @@ export function CommandCenterView({ data, filters, unit }: { data: HomeData; fil
   // Payout sum for KPI
   const payoutsTotal = data.payouts.reduce((a, b) => a + b, 0);
 
+  const drilldownParams = serializeFilters(filters);
+  const projectSlices = data.byProject.map((slice) => ({
+    ...slice,
+    href: depositSliceHref(drilldownParams, 'prod', slice.key, slice.value),
+  }));
+  const categorySlices = data.byCategory.map((slice) => ({
+    ...slice,
+    href: depositSliceHref(drilldownParams, 'cat', slice.key, slice.value),
+  }));
+
   // Project donut total
   const projectTotal = data.byProject.reduce((a, b) => a + b.value, 0);
+  const categoryTotal = data.byCategory.reduce((a, b) => a + b.value, 0);
 
   // Segment donut slices with fixed colours
   const segmentSlices = data.segments.map((s) => ({
@@ -281,6 +293,7 @@ export function CommandCenterView({ data, filters, unit }: { data: HomeData; fil
     label: s.key.replace(/_/g, ' ').replace(/^\w/, (ch) => ch.toUpperCase()),
     value: s.investors,
     color: SEGMENT_COLORS[s.key],
+    href: investorSegmentHref(drilldownParams, s.key, today, s.investors),
   }));
   const segmentTotal = data.segments.reduce((a, b) => a + b.investors, 0);
 
@@ -373,14 +386,34 @@ export function CommandCenterView({ data, filters, unit }: { data: HomeData; fil
           </div>
 
           {/* Row 3: Deposits vs Payouts (2/3) + Investment by project (1/3) */}
-          <div className="grid gap-4 lg:grid-cols-3">
+          <div className="grid gap-4 lg:grid-cols-3 xl:grid-cols-4">
             <ChartCard className="lg:col-span-2" title="Deposits vs payouts" subtitle={data.compareRange ? `Dashed: ${COMPARE_LABELS[filters.compare].toLowerCase()}` : undefined}>
               <AreaChart labels={areaLabels} series={areaSeries} bucket={data.bucket} unit={unit} />
             </ChartCard>
             <ChartCard title="Investment by project">
               <div className="flex flex-wrap items-center gap-4">
-                <DonutChart slices={data.byProject} centerValue={formatMoney(projectTotal, unit)} centerLabel="Total investment" />
-                <DonutLegend slices={data.byProject} format="value" valueText={(key) => formatMoney(data.byProject.find((p) => p.key === key)?.value ?? 0, unit)} />
+                <DonutChart
+                  slices={projectSlices}
+                  centerValue={formatMoney(projectTotal, unit)}
+                  centerLabel="Total investment"
+                  hint={projectSlices.some((slice) => slice.href) ? 'Click a slice to see the records' : undefined}
+                />
+                <DonutLegend slices={projectSlices} format="value" valueText={(key) => formatMoney(data.byProject.find((p) => p.key === key)?.value ?? 0, unit)} />
+              </div>
+            </ChartCard>
+            <ChartCard title="Investment by category">
+              <div className="flex flex-wrap items-center gap-4">
+                <DonutChart
+                  slices={categorySlices}
+                  centerValue={formatMoney(categoryTotal, unit)}
+                  centerLabel="Category investment"
+                  hint={categorySlices.some((slice) => slice.href) ? 'Click a slice to see the records' : undefined}
+                />
+                <DonutLegend
+                  slices={categorySlices}
+                  format="value"
+                  valueText={(key) => formatMoney(data.byCategory.find((category) => category.key === key)?.value ?? 0, unit)}
+                />
               </div>
             </ChartCard>
           </div>
@@ -392,7 +425,13 @@ export function CommandCenterView({ data, filters, unit }: { data: HomeData; fil
             </ChartCard>
             <ChartCard title="Investor segments">
               <div className="flex flex-wrap items-center gap-4">
-                <DonutChart slices={segmentSlices} centerValue={formatInt(segmentTotal)} centerLabel="Total investors" size={140} />
+                <DonutChart
+                  slices={segmentSlices}
+                  centerValue={formatInt(segmentTotal)}
+                  centerLabel="Total investors"
+                  size={140}
+                  hint={segmentSlices.some((slice) => slice.href) ? 'Click a slice to see the records' : undefined}
+                />
                 <DonutLegend slices={segmentSlices} format="value" />
               </div>
             </ChartCard>

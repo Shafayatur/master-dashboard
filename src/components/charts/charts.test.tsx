@@ -176,6 +176,36 @@ describe('DonutChart and DonutLegend', () => {
     clean(out);
   });
 
+  it('links clickable slices in the ring and matching legend', () => {
+    const linked = [{ key: 'a', label: 'Alpha', value: 5, href: '/explorer?t=deposits&prod=1' }];
+    const ring = html(<DonutChart slices={linked} centerValue="5" />);
+    const legend = html(<DonutLegend slices={linked} />);
+    expect(ring).toContain('<a href="/explorer?t=deposits&amp;prod=1"');
+    expect(ring).toContain('data-slice="a"');
+    expect(ring).toContain('<title>Alpha: 100.0%</title>');
+    expect(ring).toContain('focus-visible:outline');
+    expect(legend).toContain('<a href="/explorer?t=deposits&amp;prod=1"');
+    expect(legend).toContain('data-legend="a"');
+    expect(legend).toContain('hover:underline');
+    clean(ring);
+    clean(legend);
+  });
+
+  it('keeps slices without href unlinked and renders the optional hint', () => {
+    const unlinked = [{ key: 'a', label: 'Alpha', value: 5 }];
+    const ring = html(<DonutChart slices={unlinked} centerValue="5" />);
+    const legend = html(<DonutLegend slices={unlinked} />);
+    expect(ring).not.toContain('<a ');
+    expect(legend).not.toContain('<a ');
+    const withHint = html(
+      <DonutChart slices={[{ ...unlinked[0]!, href: '/explorer?t=deposits' }]} centerValue="5" hint="Click a slice to see the records" />,
+    );
+    expect(withHint).toContain('Click a slice to see the records');
+    clean(ring);
+    clean(legend);
+    clean(withHint);
+  });
+
   it('leaves gaps between segments and none for a single slice', () => {
     const out = html(<DonutChart slices={slices} centerValue="100" />);
     expect(out).toContain('stroke-dasharray="48.800 51.200"');

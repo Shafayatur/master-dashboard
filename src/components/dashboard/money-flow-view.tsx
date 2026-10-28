@@ -5,7 +5,8 @@ import { DonutChart, DonutLegend } from '@/components/charts/donut-chart';
 import { KpiCard } from '@/components/charts/kpi-card';
 import { buildMoneyFlowInsights } from '@/lib/dashboard/money-flow-insights';
 import { formatRange } from '@/lib/filters/format';
-import type { Filters } from '@/lib/filters/schema';
+import { serializeFilters, type Filters } from '@/lib/filters/schema';
+import { confirmedReinvestmentHref } from '@/lib/drilldown';
 import { formatInt, formatMoney, type MoneyUnit } from '@/lib/format/money';
 import type { MoneyFlowData } from '@/lib/queries/money-flow';
 import { BarChart } from './bar-chart';
@@ -48,8 +49,15 @@ export function MoneyFlowView({ data, unit, filters }: Props) {
     0,
     data.reinvest.total.amount - data.reinvest.confirmed.amount - data.reinvest.estimated.amount,
   );
+  const search = serializeFilters(filters);
   const reinvestSlices = [
-    { key: 'confirmed', label: 'Confirmed', value: data.reinvest.confirmed.amount, color: CHART_COLORS[0] },
+    {
+      key: 'confirmed',
+      label: 'Confirmed',
+      value: data.reinvest.confirmed.amount,
+      color: CHART_COLORS[0],
+      href: confirmedReinvestmentHref(search, data.reinvest.confirmed.amount),
+    },
     { key: 'estimated', label: 'Estimated', value: data.reinvest.estimated.amount, color: CHART_COLORS[2] },
     { key: 'other', label: 'Other approved investment', value: otherApproved, color: CHART_COLORS[5] },
   ];
@@ -148,7 +156,12 @@ export function MoneyFlowView({ data, unit, filters }: Props) {
       <div className="grid gap-4 xl:grid-cols-2">
         <ChartCard title="Reinvestment in this period">
           <div className="flex flex-wrap items-center justify-center gap-4 sm:justify-start">
-            <DonutChart slices={reinvestSlices} centerValue={formatMoney(data.reinvest.total.amount, unit)} centerLabel="Approved investment" />
+            <DonutChart
+              slices={reinvestSlices}
+              centerValue={formatMoney(data.reinvest.total.amount, unit)}
+              centerLabel="Approved investment"
+              hint={reinvestSlices.some((slice) => slice.href) ? 'Click a slice to see the records' : undefined}
+            />
             <DonutLegend
               slices={reinvestSlices}
               format="value"

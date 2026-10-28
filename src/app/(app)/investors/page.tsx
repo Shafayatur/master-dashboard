@@ -14,7 +14,15 @@ export const metadata: Metadata = { title: 'Investors' };
 
 async function Loaded({ today, filters, unit }: { today: string; filters: Filters; unit: MoneyUnit }) {
   const [data, extras] = await Promise.all([getInvestors(today), getInvestorsExtras(today, filters.range)]);
-  return <InvestorsView data={data} extras={extras} unit={unit} />;
+  return (
+    <InvestorsView
+      data={data}
+      extras={extras}
+      unit={unit}
+      search={serializeFilters(filters).toString()}
+      today={today}
+    />
+  );
 }
 
 export default async function InvestorsPage({
