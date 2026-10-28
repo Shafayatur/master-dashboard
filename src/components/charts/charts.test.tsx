@@ -364,6 +364,14 @@ describe('Heatmap', () => {
     expect(out).toContain('<title>A, x: 2.11 Cr</title>');
   });
 
+  it('renders optional day labels in non-empty cells only', () => {
+    const out = html(
+      <Heatmap rows={['Week 1']} cols={['Mon', 'Tue']} matrix={[[2, 0]]} cellLabels={[[ '1', '' ]]} />,
+    );
+    expect(count(out, 'text-[10px]')).toBe(1);
+    expect(out).toContain('>1</text>');
+  });
+
   it('hides numbers inside cells when there are many columns', () => {
     const cols = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
     const out = html(<Heatmap rows={['Mon']} cols={cols} matrix={[cols.map((_, i) => i + 1)]} />);

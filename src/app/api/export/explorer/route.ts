@@ -33,7 +33,14 @@ export async function GET(req: Request) {
     await queryConfig('INSERT INTO export_log (tab, format, filters, row_count) VALUES ($1, $2, $3::jsonb, $4)', [
       'explorer',
       fmt,
-      JSON.stringify({ table: params.table, range: params.range, search: params.search, status: params.status }),
+      JSON.stringify({
+        table: params.table,
+        range: params.range,
+        search: params.search,
+        status: params.status,
+        filters: params.filters,
+        segments: params.segments,
+      }),
       rows.length,
     ]);
   } catch (e) {

@@ -32,7 +32,10 @@ export const investorJoin = (userKey: string, alias = 'u'): string =>
   `JOIN "user" ${alias} ON ${alias}.id = ${userKey} AND ${alias}."deletedAt" IS NULL AND ${alias}."userType"::text = 'investor'`;
 
 /** Filters that describe the product/order (aliases: o = "order", p = products). */
-export function productPredicates(f: Filters, p: Params): string[] {
+export function productPredicates(
+  f: Pick<Filters, 'products' | 'categories' | 'tenures' | 'returnTypes' | 'shariah' | 'orderStatus'>,
+  p: Params,
+): string[] {
   const out: string[] = [];
   if (f.products.length) out.push(`o."productId" = ANY(${p.add(f.products)}::int[])`);
   if (f.categories.length) {

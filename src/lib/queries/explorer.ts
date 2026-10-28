@@ -1,8 +1,9 @@
 import 'server-only';
 import type { DateRange } from '@/lib/filters/dates';
-import { parseFilters } from '@/lib/filters/schema';
+import { parseFilters, type Filters, type Segment } from '@/lib/filters/schema';
 import { dhakaTs } from '@/lib/time';
-import { Params, utcBounds, type QueryFn } from './sql-filters';
+import { DEFAULT_THRESHOLDS } from './investors';
+import { Params, productPredicates, utcBounds, type QueryFn } from './sql-filters';
 
 export type ExplorerTable = 'deposits' | 'orders' | 'payouts' | 'investors';
 export const EXPLORER_TABLES: ExplorerTable[] = ['deposits', 'orders', 'payouts', 'investors'];
@@ -17,6 +18,8 @@ export interface ExplorerColumn {
 export interface ExplorerParams {
   table: ExplorerTable;
   range: DateRange;
+  filters: Pick<Filters, 'products' | 'categories' | 'tenures' | 'returnTypes' | 'shariah' | 'paymentMethod'>;
+  segments: Segment[];
   search: string;
   status: string[];
   sort: string;
@@ -58,6 +61,30 @@ const INVESTOR_JOIN = `JOIN "user" u ON u.id = o."userId" AND u."deletedAt" IS N
 const ORDER_JOIN = `JOIN "order" o ON o.id = X."orderId" AND o."deletedAt" IS NULL`;
 const day = (col: string) => `to_char(${dhakaTs(col)}, 'YYYY-MM-DD')`;
 const WHO = (key: string, sql: string, label: string): Col => ({ key, label, kind: 'text', sql });
+const INVESTOR_SEGMENT_JOIN = `LEFT JOIN (
+  WITH sched AS (
+    SELECT "orderId", MAX("paymentDate") AS last_pay FROM return_schedules WHERE "deletedAt" IS NULL GROUP BY 1
+  ), ord AS (
+    SELECT o."userId", o.status::text AS status,
+      COALESCE(s.last_pay, o."investmentDate" + (split_part(p."productDuration"::text, ' ', 1)::int * interval '1 month')) AS maturity
+    FROM "order" o JOIN products p ON p.id = o."productId" LEFT JOIN sched s ON s."orderId" = o.id
+    WHERE o."deletedAt" IS NULL AND o.status::text IN ('invested','closed')
+  ), per AS (
+    SELECT u2.id AS user_id, BOOL_OR(ord.status = 'invested') AS has_active,
+      MAX(ord.maturity) FILTER (WHERE ord.status = 'closed') AS last_closed
+    FROM "user" u2 LEFT JOIN ord ON ord."userId" = u2.id
+    WHERE u2."deletedAt" IS NULL AND u2."userType"::text = 'investor'
+    GROUP BY u2.id
+  )
+  SELECT per.user_id, CASE
+    WHEN per.has_active THEN 'active'
+    WHEN per.last_closed IS NULL THEN 'prospect'
+    WHEN per.last_closed >= (now() AT TIME ZONE 'UTC') - (${DEFAULT_THRESHOLDS.recentlyActiveDays} * interval '1 day') THEN 'recently_active'
+    WHEN per.last_closed >= (now() AT TIME ZONE 'UTC') - (${DEFAULT_THRESHOLDS.coolingDays} * interval '1 day') THEN 'cooling'
+    ELSE 'inactive'
+  END AS seg
+  FROM per
+) sg ON sg.user_id = u.id`;
 
 /** Whitelist: only these tables, columns, sorts and statuses can ever reach the SQL. */
 const TABLES: Record<ExplorerTable, TableDef> = {
@@ -103,7 +130,7 @@ const TABLES: Record<ExplorerTable, TableDef> = {
     ],
   },
   payouts: {
-    from: `returns r ${ORDER_JOIN.replace('X', 'r')} ${INVESTOR_JOIN}`,
+    from: `returns r ${ORDER_JOIN.replace('X', 'r')} JOIN products p ON p.id = o."productId" ${INVESTOR_JOIN}`,
     where: [`r."deletedAt" IS NULL`],
     dateCol: 'r."date"',
     statusCol: 'r.status::text',
@@ -122,7 +149,7 @@ const TABLES: Record<ExplorerTable, TableDef> = {
     ],
   },
   investors: {
-    from: `"user" u`,
+    from: `"user" u ${INVESTOR_SEGMENT_JOIN}`,
     where: [`u."deletedAt" IS NULL`, `u."userType"::text = 'investor'`],
     dateCol: 'u."createdAt"',
     statusCol: null,
@@ -147,6 +174,7 @@ const TABLES: Record<ExplorerTable, TableDef> = {
         kind: 'money',
         sql: `(SELECT COALESCE(SUM(d.amount), 0)::float8 FROM deposits d JOIN "order" io ON io.id = d."orderId" AND io."deletedAt" IS NULL WHERE io."userId" = u.id AND d."deletedAt" IS NULL AND d.status::text = 'approved')`,
       },
+      WHO('segment', 'sg.seg', 'Segment'),
     ],
   },
 };
@@ -161,12 +189,22 @@ export function parseExplorerParams(sp: RawParams, today: string): ExplorerParam
   const t = get('t') as ExplorerTable;
   const table: ExplorerTable = EXPLORER_TABLES.includes(t) ? t : 'deposits';
   const def = TABLES[table];
+  const parsedFilters = parseFilters(sp, today);
   const sortKey = get('sort');
   const sort = def.columns.some((c) => c.key === sortKey) ? sortKey : def.defaultSort;
   const page = Number.parseInt(get('page'), 10);
   return {
     table,
-    range: parseFilters(sp, today).range,
+    range: parsedFilters.range,
+    filters: {
+      products: parsedFilters.products,
+      categories: parsedFilters.categories,
+      tenures: parsedFilters.tenures,
+      returnTypes: parsedFilters.returnTypes,
+      shariah: parsedFilters.shariah,
+      paymentMethod: parsedFilters.paymentMethod,
+    },
+    segments: parsedFilters.segments,
     search: get('q').trim().slice(0, MAX_SEARCH),
     status: get('st').split(',').filter((s) => def.statuses.includes(s)),
     sort,
@@ -184,6 +222,14 @@ function build(params: ExplorerParams) {
   const conds = [...def.where, `${def.dateCol} >= ${p.add(start)}::timestamp`, `${def.dateCol} < ${p.add(end)}::timestamp`];
   if (def.statusCol && params.status.length) conds.push(`${def.statusCol} = ANY(${p.add(params.status)}::text[])`);
   if (params.search.length >= 2) conds.push(def.search(p.add(`%${escapeLike(params.search)}%`), p.add(params.search)));
+  if (params.table !== 'investors') {
+    conds.push(...productPredicates({ ...params.filters, orderStatus: [] }, p));
+    if (params.table === 'deposits' && params.filters.paymentMethod.length) {
+      conds.push(`d."paymentMethod"::text = ANY(${p.add(params.filters.paymentMethod)}::text[])`);
+    }
+  } else if (params.segments.length) {
+    conds.push(`sg.seg = ANY(${p.add(params.segments)}::text[])`);
+  }
   const select = [...def.columns.map((c) => `${c.sql} AS "${c.key}"`), `${params.table === 'investors' ? 'u.id' : 'u.id'} AS "userId"`].join(',\n  ');
   const order = `"${params.sort}" ${params.dir === 'asc' ? 'ASC' : 'DESC'} NULLS LAST, "id" DESC`;
   return { def, p, select, order, from: def.from, where: conds.join('\n  AND ') };

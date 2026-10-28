@@ -4,9 +4,19 @@ import path from 'node:path';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { parseFilters, type Filters } from '@/lib/filters/schema';
 import { assertReadOnlySql } from '@/lib/sql/guard';
+import { loadExplorer, parseExplorerParams } from './explorer';
 import { registrations } from './overview';
 import type { QueryFn } from './sql-filters';
-import { loadInvestorsExtras, loadSalesExtras, type InvestorsExtras, type SalesExtras } from './tabs-extra';
+import {
+  bookingActivity,
+  loadInvestorsExtras,
+  loadSalesExtras,
+  type BookingView,
+  type InvestorsExtras,
+  parseBookingView,
+  resolveBookingAnchor,
+  type SalesExtras,
+} from './tabs-extra';
 
 /**
  * Synthetic dataset built around the Dhaka midnight (UTC+6). Range under test is 1-10 Oct 2026 (daily buckets), "today" is
@@ -30,7 +40,22 @@ const NOW = new Date('2026-10-14T00:00:00Z');
 const DAILY = 'from=2026-10-01&to=2026-10-10';
 const MONTHLY = 'from=2026-07-01&to=2026-10-10';
 const filters = (qs = '', range = DAILY): Filters => parseFilters(new URLSearchParams(`p=custom&${range}&cmp=none&${qs}`), TODAY);
-const sales = (qs = '', range = DAILY): Promise<SalesExtras> => loadSalesExtras(q, filters(qs, range), NOW);
+const sales = (
+  qs = '',
+  range = DAILY,
+  view: BookingView = 'day',
+  anchor = '2026-10-10',
+  today = TODAY,
+): Promise<SalesExtras> => loadSalesExtras(q, filters(qs, range), NOW, view, anchor, today);
+
+describe('booking activity URL values', () => {
+  it('whitelists views and defaults an invalid anchor to the clamped range end', () => {
+    expect(parseBookingView('month')).toBe('month');
+    expect(parseBookingView('invalid')).toBe('day');
+    expect(resolveBookingAnchor('2026-02-31', filters().range, TODAY)).toBe('2026-10-10');
+    expect(resolveBookingAnchor(undefined, filters().range, '2026-10-05')).toBe('2026-10-05');
+  });
+});
 
 const DAYS = Array.from({ length: 10 }, (_, i) => `2026-10-${String(i + 1).padStart(2, '0')}`);
 /** One [new, returning] pair per day of 1-10 Oct. */
@@ -184,6 +209,13 @@ describe('loadSalesExtras: booking heatmap (weekday x hour, Dhaka)', () => {
         [5, 23, 1],
       ]),
     );
+    expect(d.bookingActivity).toMatchObject({
+      view: 'day',
+      rows: d.bookingHeat.rows,
+      cols: d.bookingHeat.cols,
+      matrix: d.bookingHeat.matrix,
+      total: 6,
+    });
   });
 
   it('applies the product and order filters', async () => {
@@ -193,6 +225,101 @@ describe('loadSalesExtras: booking heatmap (weekday x hour, Dhaka)', () => {
 
   it('is not affected by the deposit filters', async () => {
     expect((await sales('ds=pending')).bookingHeat.matrix).toEqual((await sales()).bookingHeat.matrix);
+  });
+
+  it('builds ten Monday-start weeks and assigns Sunday 20:30 UTC to Monday in Dhaka', async () => {
+    await db.query(`
+      INSERT INTO "order" (id, status, "totalAmount", "createdAt", "userId", "productId")
+      VALUES (20, 'booked', 1000, '2026-10-04 20:30', 1, 1)
+    `);
+    try {
+      const { bookingActivity: activity } = await sales('', DAILY, 'week', '2026-10-10');
+      expect(activity.rows).toEqual(['3 Aug', '10 Aug', '17 Aug', '24 Aug', '31 Aug', '7 Sep', '14 Sep', '21 Sep', '28 Sep', '5 Oct']);
+      expect(activity.cols).toEqual(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
+      expect(activity.matrix).toEqual([
+        [0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 0, 0, 0, 0, 0],
+        [0, 0, 1, 2, 0, 0, 0],
+        [1, 2, 0, 0, 1, 1, 1],
+      ]);
+      expect(activity.total).toBe(9);
+      expect(activity.subtitle).toBe('Bookings per day, 10 weeks to 5 Oct 2026');
+    } finally {
+      await db.query('DELETE FROM "order" WHERE id = 20');
+    }
+  });
+
+  it('builds a month grid with day labels and leaves future dates at zero', async () => {
+    const { bookingActivity: activity } = await sales('', DAILY, 'month', '2026-10-01');
+    expect(activity.title).toBe('October 2026');
+    expect(activity.rows).toEqual(['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5']);
+    expect(activity.matrix).toEqual([
+      [0, 0, 0, 2, 0, 0, 0],
+      [0, 2, 0, 0, 1, 1, 1],
+      [0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0],
+    ]);
+    expect(activity.cellLabels).toEqual([
+      ['', '', '', '1', '2', '3', '4'],
+      ['5', '6', '7', '8', '9', '10', '11'],
+      ['12', '13', '14', '15', '16', '17', '18'],
+      ['19', '20', '21', '22', '23', '24', '25'],
+      ['26', '27', '28', '29', '30', '31', ''],
+    ]);
+    expect(activity.total).toBe(7);
+  });
+
+  it('builds the correct five-week grid for February', async () => {
+    const { bookingActivity: activity } = await sales('', DAILY, 'month', '2026-02-01');
+    expect(activity.rows).toEqual(['Week 1', 'Week 2', 'Week 3', 'Week 4', 'Week 5']);
+    expect(activity.cellLabels).toEqual([
+      ['', '', '', '', '', '', '1'],
+      ['2', '3', '4', '5', '6', '7', '8'],
+      ['9', '10', '11', '12', '13', '14', '15'],
+      ['16', '17', '18', '19', '20', '21', '22'],
+      ['23', '24', '25', '26', '27', '28', ''],
+    ]);
+    expect(activity.total).toBe(0);
+  });
+
+  it('builds year totals by Dhaka weekday and month and applies product filters', async () => {
+    const { bookingActivity: activity } = await sales('', DAILY, 'year', '2026-10-01');
+    expect(activity.rows).toEqual(['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']);
+    expect(activity.cols).toEqual(['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']);
+    expect(activity.matrix).toEqual([
+      Array(12).fill(0),
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
+      [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
+    ]);
+    expect(activity.total).toBe(8);
+    const explorer = await loadExplorer(
+      q,
+      parseExplorerParams(
+        new URLSearchParams(`t=orders&p=custom&from=2026-01-01&to=${TODAY}`),
+        TODAY,
+      ),
+    );
+    expect(activity.total).toBe(explorer.total);
+    const filtered = await sales('prod=2', DAILY, 'year', '2026-10-01');
+    expect(filtered.bookingActivity.total).toBe(2);
+    expect(filtered.bookingActivity.matrix[1]).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0]);
+  });
+
+  it('returns an empty matrix for a window after today', async () => {
+    const activity = await bookingActivity(q, filters(), 'week', '2027-01-03', TODAY);
+    expect(activity.total).toBe(0);
+    expect(activity.matrix.flat().every((value) => value === 0)).toBe(true);
   });
 });
 
@@ -328,7 +455,7 @@ describe('empty database', () => {
       assertReadOnlySql(sql);
       return (await empty.query(sql, params)).rows as Record<string, unknown>[];
     };
-    const s = await loadSalesExtras(eq, filters(), NOW);
+    const s = await loadSalesExtras(eq, filters(), NOW, 'day', '2026-10-10', TODAY);
     expect(s.newVsReturning).toEqual(pairs({}));
     expect(s.weekday).toEqual(week({}));
     expect(s.bookingHeat.matrix).toEqual(heat([]));

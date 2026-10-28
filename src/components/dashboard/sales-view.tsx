@@ -10,9 +10,9 @@ import { CHART_COLORS } from '@/components/charts/chart-colors';
 import { ChartCard } from '@/components/charts/chart-card';
 import { DonutChart, DonutLegend } from '@/components/charts/donut-chart';
 import { HBarList } from '@/components/charts/hbar-list';
-import { Heatmap } from '@/components/charts/heatmap';
 import { KpiCard } from '@/components/charts/kpi-card';
 import { BarChart } from './bar-chart';
+import { BookingActivityPanel } from './booking-activity-panel';
 import { CountUp } from './count-up';
 import { PageTools } from './page-tools';
 
@@ -21,6 +21,8 @@ interface Props {
   extras: SalesExtras;
   filters: Filters;
   unit: MoneyUnit;
+  bookingAnchor: string;
+  search: string;
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -94,7 +96,7 @@ function BreakdownChart({
   );
 }
 
-export function SalesView({ data, extras, filters, unit }: Props) {
+export function SalesView({ data, extras, filters, unit, bookingAnchor, search }: Props) {
   const newVsReturningItems = extras.newVsReturning.map((row) => ({
     label: bucketLabel(row.label, extras.bucket),
     values: [
@@ -121,6 +123,7 @@ export function SalesView({ data, extras, filters, unit }: Props) {
       { value: point.reinvest, color: 'amber-500', name: 'Reinvest' },
     ],
   }));
+  const activity = extras.bookingActivity;
   const cards = [
     {
       label: 'Investment value',
@@ -224,16 +227,7 @@ export function SalesView({ data, extras, filters, unit }: Props) {
         <ChartCard title="Deposits by weekday">
           <HBarList items={weekdayItems} kind="money" unit={unit} color={CHART_COLORS[0]} />
         </ChartCard>
-        <ChartCard
-          title="Booking activity by weekday and hour"
-          subtitle="Bookings, Dhaka time. Use it to time campaigns."
-        >
-          <Heatmap
-            rows={extras.bookingHeat.rows}
-            cols={extras.bookingHeat.cols}
-            matrix={extras.bookingHeat.matrix}
-          />
-        </ChartCard>
+        <BookingActivityPanel activity={activity} bookingAnchor={bookingAnchor} search={search} />
       </div>
     </div>
   );
