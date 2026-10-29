@@ -3,7 +3,8 @@ import type { DateRange } from '@/lib/filters/dates';
 import { parseFilters, type Filters, type Segment } from '@/lib/filters/schema';
 import { dhakaTs } from '@/lib/time';
 import { DEFAULT_THRESHOLDS } from './investors';
-import { Params, productPredicates, utcBounds, type QueryFn } from './sql-filters';
+import { Params, pgTs, productPredicates, utcBounds, type QueryFn } from './sql-filters';
+import { perInvestorCte, segmentCase } from './segment-sql';
 
 export type ExplorerTable = 'deposits' | 'orders' | 'payouts' | 'investors';
 export const EXPLORER_TABLES: ExplorerTable[] = ['deposits', 'orders', 'payouts', 'investors'];
@@ -61,7 +62,7 @@ const INVESTOR_JOIN = `JOIN "user" u ON u.id = o."userId" AND u."deletedAt" IS N
 const ORDER_JOIN = `JOIN "order" o ON o.id = X."orderId" AND o."deletedAt" IS NULL`;
 const day = (col: string) => `to_char(${dhakaTs(col)}, 'YYYY-MM-DD')`;
 const WHO = (key: string, sql: string, label: string): Col => ({ key, label, kind: 'text', sql });
-const INVESTOR_SEGMENT_JOIN = `LEFT JOIN (
+const investorSegmentJoin = (nowTs: string, recent: string, cooling: string) => `LEFT JOIN (
   WITH sched AS (
     SELECT "orderId", MAX("paymentDate") AS last_pay FROM return_schedules WHERE "deletedAt" IS NULL GROUP BY 1
   ), ord AS (
@@ -69,20 +70,8 @@ const INVESTOR_SEGMENT_JOIN = `LEFT JOIN (
       COALESCE(s.last_pay, o."investmentDate" + (split_part(p."productDuration"::text, ' ', 1)::int * interval '1 month')) AS maturity
     FROM "order" o JOIN products p ON p.id = o."productId" LEFT JOIN sched s ON s."orderId" = o.id
     WHERE o."deletedAt" IS NULL AND o.status::text IN ('invested','closed')
-  ), per AS (
-    SELECT u2.id AS user_id, BOOL_OR(ord.status = 'invested') AS has_active,
-      MAX(ord.maturity) FILTER (WHERE ord.status = 'closed') AS last_closed
-    FROM "user" u2 LEFT JOIN ord ON ord."userId" = u2.id
-    WHERE u2."deletedAt" IS NULL AND u2."userType"::text = 'investor'
-    GROUP BY u2.id
-  )
-  SELECT per.user_id, CASE
-    WHEN per.has_active THEN 'active'
-    WHEN per.last_closed IS NULL THEN 'prospect'
-    WHEN per.last_closed >= (now() AT TIME ZONE 'UTC') - (${DEFAULT_THRESHOLDS.recentlyActiveDays} * interval '1 day') THEN 'recently_active'
-    WHEN per.last_closed >= (now() AT TIME ZONE 'UTC') - (${DEFAULT_THRESHOLDS.coolingDays} * interval '1 day') THEN 'cooling'
-    ELSE 'inactive'
-  END AS seg
+  ), ${perInvestorCte(nowTs)}
+  SELECT per.user_id, ${segmentCase(nowTs, recent, cooling)} AS seg
   FROM per
 ) sg ON sg.user_id = u.id`;
 
@@ -149,7 +138,7 @@ const TABLES: Record<ExplorerTable, TableDef> = {
     ],
   },
   investors: {
-    from: `"user" u ${INVESTOR_SEGMENT_JOIN}`,
+    from: '"user" u',
     where: [`u."deletedAt" IS NULL`, `u."userType"::text = 'investor'`],
     dateCol: 'u."createdAt"',
     statusCol: null,
@@ -215,9 +204,16 @@ export function parseExplorerParams(sp: RawParams, today: string): ExplorerParam
 
 const escapeLike = (s: string): string => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 
-function build(params: ExplorerParams) {
+function build(params: ExplorerParams, now: Date) {
   const def = TABLES[params.table];
   const p = new Params();
+  const from = params.table === 'investors'
+    ? `"user" u ${investorSegmentJoin(
+        `${p.add(pgTs(now))}::timestamp`,
+        `${p.add(DEFAULT_THRESHOLDS.recentlyActiveDays)}::int`,
+        `${p.add(DEFAULT_THRESHOLDS.coolingDays)}::int`,
+      )}`
+    : def.from;
   const { start, end } = utcBounds(params.range);
   const conds = [...def.where, `${def.dateCol} >= ${p.add(start)}::timestamp`, `${def.dateCol} < ${p.add(end)}::timestamp`];
   if (def.statusCol && params.status.length) conds.push(`${def.statusCol} = ANY(${p.add(params.status)}::text[])`);
@@ -232,7 +228,7 @@ function build(params: ExplorerParams) {
   }
   const select = [...def.columns.map((c) => `${c.sql} AS "${c.key}"`), `${params.table === 'investors' ? 'u.id' : 'u.id'} AS "userId"`].join(',\n  ');
   const order = `"${params.sort}" ${params.dir === 'asc' ? 'ASC' : 'DESC'} NULLS LAST, "id" DESC`;
-  return { def, p, select, order, from: def.from, where: conds.join('\n  AND ') };
+  return { def, p, select, order, from, where: conds.join('\n  AND ') };
 }
 
 function cells(def: TableDef, r: Record<string, unknown>): Record<string, CellValue> {
@@ -244,8 +240,8 @@ function cells(def: TableDef, r: Record<string, unknown>): Record<string, CellVa
   return out;
 }
 
-export async function loadExplorer(q: QueryFn, params: ExplorerParams): Promise<ExplorerResult> {
-  const b = build(params);
+export async function loadExplorer(q: QueryFn, params: ExplorerParams, now: Date = new Date()): Promise<ExplorerResult> {
+  const b = build(params, now);
   const [countRow] = await q(`SELECT COUNT(*)::int AS n FROM ${b.from}\nWHERE ${b.where}`, b.p.values);
   const offset = (params.page - 1) * PAGE_SIZE;
   const rows = await q(
@@ -265,8 +261,8 @@ export async function loadExplorer(q: QueryFn, params: ExplorerParams): Promise<
 }
 
 /** Same filters, no paging, capped at EXPORT_MAX rows. */
-export async function exportExplorer(q: QueryFn, params: ExplorerParams): Promise<{ columns: ExplorerColumn[]; rows: Record<string, CellValue>[] }> {
-  const b = build(params);
+export async function exportExplorer(q: QueryFn, params: ExplorerParams, now: Date = new Date()): Promise<{ columns: ExplorerColumn[]; rows: Record<string, CellValue>[] }> {
+  const b = build(params, now);
   const rows = await q(`SELECT ${b.select}\nFROM ${b.from}\nWHERE ${b.where}\nORDER BY ${b.order}\nLIMIT ${EXPORT_MAX}`, b.p.values);
   return { columns: b.def.columns.map(({ key, label, kind }) => ({ key, label, kind })), rows: rows.map((r) => cells(b.def, r)) };
 }

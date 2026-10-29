@@ -17,10 +17,11 @@ export async function GET(req: Request) {
   if (denied) return denied;
 
   const url = new URL(req.url);
-  const today = todayDhaka();
+  const now = new Date();
+  const today = todayDhaka(now);
   const params = parseExplorerParams(url.searchParams, today);
   const fmt = url.searchParams.get('fmt') === 'xlsx' ? 'xlsx' : 'csv';
-  const { columns, rows } = await exportExplorer((sql, p) => querySource<Row>(sql, p), params);
+  const { columns, rows } = await exportExplorer((sql, p) => querySource<Row>(sql, p), params, now);
 
   const cols: Column<Record<string, CellValue>>[] = columns.map((c) => ({
     header: c.label,

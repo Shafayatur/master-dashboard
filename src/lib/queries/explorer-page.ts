@@ -4,5 +4,5 @@ import { loadExplorer, type ExplorerParams, type ExplorerResult } from './explor
 import type { Row } from './sql-filters';
 
 /** Not cached: filters, sort and page make almost every request unique. */
-export const getExplorer = (params: ExplorerParams): Promise<ExplorerResult> =>
-  loadExplorer((sql, p) => querySource<Row>(sql, p), params);
+export const getExplorer = (params: ExplorerParams, now: Date = new Date()): Promise<ExplorerResult> =>
+  loadExplorer((sql, p) => querySource<Row>(sql, p), params, now);

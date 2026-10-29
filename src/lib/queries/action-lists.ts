@@ -116,8 +116,9 @@ ORDER BY ord.maturity ASC LIMIT $4::int`,
 async function cooling(q: QueryFn, now: string, limit: number) {
   const { recentlyActiveDays, coolingDays } = DEFAULT_THRESHOLDS;
   const rows = await q(
-    `WITH ${ORD}, active AS (SELECT DISTINCT "userId" FROM ord WHERE status = 'invested'),
-lc AS (SELECT DISTINCT ON ("userId") "userId", maturity, project FROM ord WHERE status = 'closed' ORDER BY "userId", maturity DESC)
+    `WITH ${ORD}, active AS (SELECT DISTINCT "userId" FROM ord WHERE status = 'invested' AND maturity >= $1::timestamp),
+lc AS (SELECT DISTINCT ON ("userId") "userId", maturity, project FROM ord
+  WHERE status = 'closed' OR maturity < $1::timestamp ORDER BY "userId", maturity DESC)
 SELECT ${WHO}, lc.project AS last_project, to_char(lc.maturity + interval '6 hours', 'YYYY-MM-DD') AS last_maturity,
   ${DAYS('$1::timestamp', 'lc.maturity')} AS days_since,
   COALESCE(l.ltv, 0)::float8 AS ltv, COALESCE(c.n, 0)::int AS investments,

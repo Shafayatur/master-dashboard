@@ -1,6 +1,7 @@
 import 'server-only';
 import { addDays, addMonths, endOfMonth, startOfMonth } from '@/lib/filters/dates';
 import { Params, pgTs, utcBounds, type QueryFn } from './sql-filters';
+import { perInvestorCte, segmentCase } from './segment-sql';
 
 export type SegmentKey = 'active' | 'recently_active' | 'cooling' | 'inactive' | 'prospect';
 export const SEGMENT_ORDER: SegmentKey[] = ['active', 'recently_active', 'cooling', 'inactive', 'prospect'];
@@ -76,8 +77,8 @@ const INVESTOR = `u."deletedAt" IS NULL AND u."userType"::text = 'investor'`;
 export async function segments(q: QueryFn, now: Date, t: Thresholds = DEFAULT_THRESHOLDS): Promise<SegmentRow[]> {
   const p = new Params();
   const nowTs = `${p.add(pgTs(now))}::timestamp`;
-  const recent = p.add(t.recentlyActiveDays);
-  const cooling = p.add(t.coolingDays);
+  const recent = `${p.add(t.recentlyActiveDays)}::int`;
+  const cooling = `${p.add(t.coolingDays)}::int`;
   const rows = await q(
     `WITH sched AS (
   SELECT "orderId", MAX("paymentDate") AS last_pay FROM return_schedules WHERE "deletedAt" IS NULL GROUP BY 1
@@ -86,18 +87,9 @@ export async function segments(q: QueryFn, now: Date, t: Thresholds = DEFAULT_TH
     COALESCE(s.last_pay, o."investmentDate" + (split_part(p."productDuration"::text, ' ', 1)::int * interval '1 month')) AS maturity
   FROM "order" o JOIN products p ON p.id = o."productId" LEFT JOIN sched s ON s."orderId" = o.id
   WHERE o."deletedAt" IS NULL AND o.status::text IN ('invested', 'closed')
-), per AS (
-  SELECT u.id AS user_id, BOOL_OR(ord.status = 'invested') AS has_active,
-    MAX(ord.maturity) FILTER (WHERE ord.status = 'closed') AS last_closed
-  FROM "user" u LEFT JOIN ord ON ord."userId" = u.id WHERE ${INVESTOR} GROUP BY u.id
-), ${LTV}
+), ${perInvestorCte(nowTs)}, ${LTV}
 SELECT seg, COUNT(*)::int AS investors, COALESCE(SUM(v), 0)::float8 AS lifetime_value FROM (
-  SELECT COALESCE(l.ltv, 0) AS v, CASE
-    WHEN per.has_active THEN 'active'
-    WHEN per.last_closed IS NULL THEN 'prospect'
-    WHEN per.last_closed >= ${nowTs} - (${recent}::int * interval '1 day') THEN 'recently_active'
-    WHEN per.last_closed >= ${nowTs} - (${cooling}::int * interval '1 day') THEN 'cooling'
-    ELSE 'inactive' END AS seg
+  SELECT COALESCE(l.ltv, 0) AS v, ${segmentCase(nowTs, recent, cooling)} AS seg
   FROM per LEFT JOIN ltv l ON l."userId" = per.user_id
 ) t GROUP BY seg`,
     p.values,
