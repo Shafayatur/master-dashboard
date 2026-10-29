@@ -11,7 +11,7 @@ export const maxDuration = 30;
 
 const XLSX_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
-/** GET /api/export/actions?list=maturing|cooling|stuck|pending&days=14&fmt=csv|xlsx  ->  call sheet. */
+/** GET /api/export/actions?list=maturing|overdue|cooling|stuck|pending&days=14&fmt=csv|xlsx  ->  call sheet. */
 export async function GET(req: Request) {
   const denied = await requireSessionApi();
   if (denied) return denied;
