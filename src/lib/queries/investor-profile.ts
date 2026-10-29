@@ -1,6 +1,7 @@
 import 'server-only';
 import { DEFAULT_THRESHOLDS, type SegmentKey } from './investors';
 import { pgTs, type QueryFn, type Row } from './sql-filters';
+import { perInvestorCte, segmentCase } from './segment-sql';
 
 export interface InvestorHit {
   userId: number;
@@ -92,7 +93,7 @@ ORDER BY (EXISTS (SELECT 1 FROM "order" oy WHERE oy."userId" = u.id AND oy."dele
 const ORD = (userParam: string) => `sched AS (
   SELECT "orderId", MAX("paymentDate") AS last_pay FROM return_schedules WHERE "deletedAt" IS NULL GROUP BY 1
 ), ord AS (
-  SELECT o.id AS order_id, o.status::text AS status, o."totalAmount" AS amount, p.name AS project,
+  SELECT o.id AS order_id, o."userId", o.status::text AS status, o."totalAmount" AS amount, p.name AS project,
     COALESCE(s.last_pay, o."investmentDate" + (split_part(p."productDuration"::text, ' ', 1)::int * interval '1 month')) AS maturity
   FROM "order" o JOIN products p ON p.id = o."productId" LEFT JOIN sched s ON s."orderId" = o.id
   WHERE o."deletedAt" IS NULL AND o."userId" = ${userParam} AND o.status::text IN ('invested', 'closed')
@@ -102,6 +103,9 @@ const ORD = (userParam: string) => `sched AS (
 export async function investorProfile(q: QueryFn, userId: number, now: Date): Promise<InvestorProfile | null> {
   const nowTs = pgTs(now);
   const { recentlyActiveDays, coolingDays } = DEFAULT_THRESHOLDS;
+  const segmentNow = '$2::timestamp';
+  const recent = '$3::int';
+  const cooling = '$4::int';
   const [who] = await q(
     `SELECT u.id AS user_id, COALESCE(u.name, '') AS name, COALESCE(u.phone, '') AS phone, COALESCE(u.email, '') AS email,
   ${dhaka('u."createdAt"')} AS registered, COALESCE(u."isEmailVerified", FALSE) AS email_ok, COALESCE(u."isPhoneVerified", FALSE) AS phone_ok
@@ -112,13 +116,8 @@ FROM "user" u WHERE u.id = $1::int AND ${INVESTOR}`,
 
   const [seg, next, stats, tenure, paid, orders, deposits, payouts] = await Promise.all([
     q(
-      `WITH ${ORD('$1::int')}
-SELECT CASE
-  WHEN BOOL_OR(status = 'invested') THEN 'active'
-  WHEN MAX(maturity) FILTER (WHERE status = 'closed') IS NULL THEN 'prospect'
-  WHEN MAX(maturity) FILTER (WHERE status = 'closed') >= $2::timestamp - ($3::int * interval '1 day') THEN 'recently_active'
-  WHEN MAX(maturity) FILTER (WHERE status = 'closed') >= $2::timestamp - ($4::int * interval '1 day') THEN 'cooling'
-  ELSE 'inactive' END AS seg FROM ord`,
+      `WITH ${ORD('$1::int')}, ${perInvestorCte(segmentNow)}
+SELECT ${segmentCase(segmentNow, recent, cooling)} AS seg FROM per WHERE per.user_id = $1::int`,
       [userId, nowTs, recentlyActiveDays, coolingDays],
     ),
     q(
