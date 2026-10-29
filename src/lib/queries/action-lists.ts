@@ -3,8 +3,8 @@ import { DEFAULT_THRESHOLDS } from './investors';
 import { STUCK_BOOKING_DAYS } from './overview';
 import { pgTs, type QueryFn, type Row } from './sql-filters';
 
-export type ListKey = 'maturing' | 'cooling' | 'stuck' | 'pending';
-export const LIST_KEYS: ListKey[] = ['maturing', 'cooling', 'stuck', 'pending'];
+export type ListKey = 'maturing' | 'overdue' | 'cooling' | 'stuck' | 'pending';
+export const LIST_KEYS: ListKey[] = ['maturing', 'overdue', 'cooling', 'stuck', 'pending'];
 
 export interface Contact {
   userId: number;
@@ -22,6 +22,10 @@ export interface MaturingRow extends Contact {
   daysLeft: number;
   lifetimeValue: number;
   investments: number;
+}
+export interface OverdueRow extends Omit<MaturingRow, 'daysLeft'> {
+  daysOverdue: number;
+  bucket: '31-90' | '90+';
 }
 export interface CoolingRow extends Contact {
   lastProject: string;
@@ -56,6 +60,7 @@ export interface ActionListsData {
   generatedAt: string;
   maturingDays: number;
   maturing: ListResult<MaturingRow>;
+  overdue: ListResult<OverdueRow>;
   cooling: ListResult<CoolingRow>;
   stuck: ListResult<StuckRow>;
   pending: ListResult<PendingRow>;
@@ -110,6 +115,28 @@ ORDER BY ord.maturity ASC LIMIT $4::int`,
   return result(rows, (r): MaturingRow => ({
     ...contact(r), orderId: num(r.order_id), project: str(r.project), amount: num(r.amount), maturity: str(r.maturity),
     daysLeft: num(r.days_left), lifetimeValue: num(r.ltv), investments: num(r.investments),
+  }));
+}
+
+async function overdue(q: QueryFn, now: string, limit: number) {
+  const rows = await q(
+    `WITH ${ORD}
+SELECT ord.order_id, ${WHO}, ord.project, ord.amount::float8 AS amount,
+  to_char(ord.maturity + interval '6 hours', 'YYYY-MM-DD') AS maturity,
+  CEIL(EXTRACT(EPOCH FROM ($1::timestamp - ord.maturity)) / 86400)::int AS days_overdue,
+  CASE WHEN CEIL(EXTRACT(EPOCH FROM ($1::timestamp - ord.maturity)) / 86400)::int > $3::int THEN '90+' ELSE '31-90' END AS bucket,
+  COALESCE(l.ltv, 0)::float8 AS ltv, COALESCE(c.n, 0)::int AS investments,
+  COUNT(*) OVER ()::int AS total, SUM(ord.amount) OVER ()::float8 AS total_amount
+FROM ord JOIN "user" u ON u.id = ord."userId" AND ${INVESTOR}
+LEFT JOIN ltv l ON l."userId" = ord."userId" LEFT JOIN cnt c ON c."userId" = ord."userId"
+WHERE ord.status = 'invested' AND ord.maturity < $1::timestamp - ($2::int * interval '1 day')
+ORDER BY days_overdue DESC, ord.order_id DESC LIMIT $4::int`,
+    [now, OVERDUE_DAYS, 90, limit],
+  );
+  return result(rows, (r): OverdueRow => ({
+    ...contact(r), orderId: num(r.order_id), project: str(r.project), amount: num(r.amount), maturity: str(r.maturity),
+    daysOverdue: num(r.days_overdue), bucket: str(r.bucket) as OverdueRow['bucket'],
+    lifetimeValue: num(r.ltv), investments: num(r.investments),
   }));
 }
 
@@ -170,6 +197,12 @@ ORDER BY d."date" ASC LIMIT $2::int`,
 
 export async function loadActionLists(q: QueryFn, now: Date, opts: { maturingDays: number; limit: number }): Promise<ActionListsData> {
   const t = pgTs(now);
-  const [m, c, s, p] = await Promise.all([maturing(q, t, opts.maturingDays, opts.limit), cooling(q, t, opts.limit), stuck(q, t, opts.limit), pending(q, t, opts.limit)]);
-  return { generatedAt: now.toISOString(), maturingDays: opts.maturingDays, maturing: m, cooling: c, stuck: s, pending: p };
+  const [m, o, c, s, p] = await Promise.all([
+    maturing(q, t, opts.maturingDays, opts.limit),
+    overdue(q, t, opts.limit),
+    cooling(q, t, opts.limit),
+    stuck(q, t, opts.limit),
+    pending(q, t, opts.limit),
+  ]);
+  return { generatedAt: now.toISOString(), maturingDays: opts.maturingDays, maturing: m, overdue: o, cooling: c, stuck: s, pending: p };
 }
