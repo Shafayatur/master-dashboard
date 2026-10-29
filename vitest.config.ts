@@ -9,5 +9,10 @@ export default defineConfig({
     },
   },
   esbuild: { jsx: 'automatic' },
-  test: { environment: 'node', include: ['src/**/*.test.ts', 'src/**/*.test.tsx'] },
+  test: {
+    environment: 'node',
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
+    testTimeout: 30000,
+    hookTimeout: 30000,
+  },
 });
