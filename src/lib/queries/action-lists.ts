@@ -195,14 +195,34 @@ ORDER BY d."date" ASC LIMIT $2::int`,
   }));
 }
 
-export async function loadActionLists(q: QueryFn, now: Date, opts: { maturingDays: number; limit: number }): Promise<ActionListsData> {
+export async function loadActionLists(
+  q: QueryFn,
+  now: Date,
+  opts: { maturingDays: number; limit: number; only?: ListKey },
+): Promise<ActionListsData> {
   const t = pgTs(now);
-  const [m, o, c, s, p] = await Promise.all([
-    maturing(q, t, opts.maturingDays, opts.limit),
-    overdue(q, t, opts.limit),
-    cooling(q, t, opts.limit),
-    stuck(q, t, opts.limit),
-    pending(q, t, opts.limit),
-  ]);
+  let m = { total: 0, amount: 0, rows: [] as MaturingRow[] };
+  let o = { total: 0, amount: 0, rows: [] as OverdueRow[] };
+  let c = { total: 0, amount: 0, rows: [] as CoolingRow[] };
+  let s = { total: 0, amount: 0, rows: [] as StuckRow[] };
+  let p = { total: 0, amount: 0, rows: [] as PendingRow[] };
+
+  if (opts.only) {
+    switch (opts.only) {
+      case 'maturing': m = await maturing(q, t, opts.maturingDays, opts.limit); break;
+      case 'overdue': o = await overdue(q, t, opts.limit); break;
+      case 'cooling': c = await cooling(q, t, opts.limit); break;
+      case 'stuck': s = await stuck(q, t, opts.limit); break;
+      case 'pending': p = await pending(q, t, opts.limit); break;
+    }
+  } else {
+    [m, o, c, s, p] = await Promise.all([
+      maturing(q, t, opts.maturingDays, opts.limit),
+      overdue(q, t, opts.limit),
+      cooling(q, t, opts.limit),
+      stuck(q, t, opts.limit),
+      pending(q, t, opts.limit),
+    ]);
+  }
   return { generatedAt: now.toISOString(), maturingDays: opts.maturingDays, maturing: m, overdue: o, cooling: c, stuck: s, pending: p };
 }

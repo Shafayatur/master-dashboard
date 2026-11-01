@@ -34,7 +34,7 @@ Maturity of an order = last `return_schedules."paymentDate"`, else `investmentDa
 | Prospect | Registered, never invested |
 
 Investors who are not Active are bucketed by their latest maturity across all non-cancelled orders. Invested orders past maturity are also an
-"overdue" attention counter and feed the "ready to reinvest" list. Thresholds are editable (`app_settings.segment_thresholds`).
+"overdue" attention counter and feed the "ready to reinvest" list. Thresholds currently come from `DEFAULT_THRESHOLDS` in code; `app_settings.segment_thresholds` is not yet read.
 
 ## Reinvestment (three levels, labelled honestly in the UI)
 1. **Confirmed**: deposit with `paymentMethod = 'reinvest'`.

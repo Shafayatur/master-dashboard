@@ -73,6 +73,22 @@ describe('loadActionLists', () => {
     expect(d.maturing.total).toBe(2);
     expect(JSON.parse(JSON.stringify(d))).toEqual(d);
   });
+  it('runs only the requested query and empties the other lists', async () => {
+    const calls: string[] = [];
+    const counted: QueryFn = async (sql, params = []) => {
+      calls.push(sql);
+      return q(sql, params);
+    };
+    const d = await loadActionLists(counted, NOW, { maturingDays: 14, limit: 50, only: 'overdue' });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]).toContain("ord.status = 'invested'");
+    expect(d.overdue.total).toBe(0);
+    expect(d.maturing).toEqual({ total: 0, amount: 0, rows: [] });
+    expect(d.cooling).toEqual({ total: 0, amount: 0, rows: [] });
+    expect(d.stuck).toEqual({ total: 0, amount: 0, rows: [] });
+    expect(d.pending).toEqual({ total: 0, amount: 0, rows: [] });
+  });
   it('builds a call-sheet CSV per list', async () => {
     const d = await loadActionLists(q, NOW, { maturingDays: 14, limit: 50 });
     const csv = listToCsv('cooling', d);

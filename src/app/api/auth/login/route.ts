@@ -4,17 +4,13 @@ import { getAuthEnv } from '@/lib/auth/env';
 import { verifyPasskey } from '@/lib/auth/passkey';
 import { SESSION_COOKIE, SESSION_TTL_SECONDS, createSessionToken } from '@/lib/auth/session';
 import { getLockState, hashIp, recordAttempt } from '@/lib/auth/login-attempts';
+import { clientIp } from '@/lib/auth/client-ip';
 import { isSameOrigin } from '@/lib/auth/same-origin';
 import { queryConfig } from '@/lib/db/config';
 
 export const dynamic = 'force-dynamic';
 
 const body = z.object({ passkey: z.string().min(1).max(256) });
-
-function clientIp(): string {
-  const h = headers();
-  return (h.get('x-forwarded-for')?.split(',')[0] ?? h.get('x-real-ip') ?? 'unknown').trim();
-}
 
 export async function POST(req: Request) {
   if (!isSameOrigin(req)) return Response.json({ error: 'forbidden' }, { status: 403 });
@@ -28,7 +24,7 @@ export async function POST(req: Request) {
   const parsed = body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: 'Enter the passkey' }, { status: 400 });
 
-  const ipHash = hashIp(clientIp(), env.sessionSecret);
+  const ipHash = hashIp(clientIp(headers()), env.sessionSecret);
   try {
     // Fail closed: if the attempt store is unavailable nobody can sign in.
     const lock = await getLockState(queryConfig, ipHash);

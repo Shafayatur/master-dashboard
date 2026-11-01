@@ -22,7 +22,7 @@ export async function GET(req: Request) {
   const days = Math.min(60, Math.max(1, Number.parseInt(url.searchParams.get('days') ?? '14', 10) || 14));
   const fmt = url.searchParams.get('fmt') === 'xlsx' ? 'xlsx' : 'csv';
 
-  const data = await loadActionLists((sql, params) => querySource<Row>(sql, params), new Date(), { maturingDays: days, limit: EXPORT_LIMIT });
+  const data = await loadActionLists((sql, params) => querySource<Row>(sql, params), new Date(), { maturingDays: days, limit: EXPORT_LIMIT, only: list });
   const out = listExport(list, data);
   const body = fmt === 'xlsx' ? new Uint8Array(await out.toXlsx()) : out.toCsv();
 

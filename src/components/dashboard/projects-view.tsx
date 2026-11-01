@@ -99,7 +99,7 @@ export function ProjectsView({ data, activeProjects, filters, unit, searchParams
           {preferredTenure?.label ?? '—'}
         </KpiCard>
         <KpiCard i={3} icon={Layers3} tone="amber" label="Active projects">
-          <CountUp value={data.scorecard.length} kind="int" />
+          <CountUp value={activeProjects.length} kind="int" />
         </KpiCard>
       </div>
 

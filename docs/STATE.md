@@ -3,12 +3,15 @@
 | Chunk | Status |
 |---|---|
 | Phase 0 foundation, env, auth, app shell, filter bar, session guard | merged to `fix/env-connection-parts` |
-| Command Center data layer (queries, formatting, insights) | this patch, 107 tests passing |
-| Command Center screen (KPI cards, trend chart, target ring, funnel, attention, insights, auto-refresh, unit toggle) | this PR (feat/command-center-screen) |
-| Sales, Projects & Tenure | after that |
-| Investors + segments, Money Flow, Action Lists, Targets, Explorer, exports | later phases |
-| Chart toolkit (KpiCard, Sparkline, DonutChart, AreaChart, HBarList, Heatmap, ExportBar) and the `/design` gallery; see `docs/design.md` | this PR (feat/chart-toolkit) |
-| Command Center visual data (`kpiSpark`, payouts, sales vs reinvest, project/category donuts, segments, recent activity); see `docs/metrics.md` | this PR (feat/home-data) |
-| Sales and Investors extras data (`getSalesExtras`: new vs returning, weekday, booking heatmap; `getInvestorsExtras`: registrations vs first investments); see `docs/metrics.md` | this PR (feat/tabs-data) |
+| Command Center data layer and screen (queries, KPIs, trends, targets, attention, insights) | implemented |
+| Sales | implemented |
+| Projects & Tenure | implemented |
+| Investors and segments | implemented |
+| Money Flow | implemented |
+| Action Lists | implemented |
+| Targets | implemented |
+| Data Explorer and exports | implemented |
+| Chart toolkit and `/design` gallery; see `docs/design.md` | implemented |
+| Command Center visual data and Sales/Investors extras; see `docs/metrics.md` | implemented |
 
-Open items: sanity report not yet reviewed against real data; target rows are added in Neon until the Targets tab exists.
+Open items: sanity report not yet reviewed against real data; 303 tests passing.
