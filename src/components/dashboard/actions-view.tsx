@@ -1,4 +1,4 @@
-import { CalendarClock, Clock, Hourglass, Snowflake } from 'lucide-react';
+import { AlertTriangle, CalendarClock, Clock, Hourglass, Snowflake } from 'lucide-react';
 import Link from 'next/link';
 import { KpiCard } from '@/components/charts/kpi-card';
 import { formatInt, formatMoney, type MoneyUnit } from '@/lib/format/money';
@@ -32,6 +32,7 @@ function InvestorCell({ investor }: { investor: Contact }) {
 export function ActionsView({ data, unit }: { data: ActionListsData; unit: MoneyUnit }) {
   const kpis = [
     { label: 'Maturing soon', total: data.maturing.total, amount: data.maturing.amount, icon: CalendarClock, tone: 'blue' as const },
+    { label: 'Overdue: status needs update', total: data.overdue.total, amount: data.overdue.amount, icon: AlertTriangle, tone: 'rose' as const },
     { label: 'Cooling investors', total: data.cooling.total, amount: data.cooling.amount, icon: Snowflake, tone: 'amber' as const },
     { label: 'Stuck bookings', total: data.stuck.total, amount: data.stuck.amount, icon: Clock, tone: 'violet' as const },
     { label: 'Pending deposits', total: data.pending.total, amount: data.pending.amount, icon: Hourglass, tone: 'rose' as const },
@@ -47,7 +48,7 @@ export function ActionsView({ data, unit }: { data: ActionListsData; unit: Money
         <PageTools generatedAt={data.generatedAt} unit={unit} />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {kpis.map(({ label, total, amount, icon, tone }, index) => (
           <KpiCard
             key={label}
@@ -101,6 +102,27 @@ export function ActionsView({ data, unit }: { data: ActionListsData; unit: Money
             formatInt(row.investments),
           ])}
           emptyText="No investments are maturing in this window."
+        />
+        <ActionListCard
+          title="Overdue: status needs update"
+          description="Invested orders more than 30 days past maturity. Update the stale order status."
+          total={data.overdue.total}
+          amountLabel={`Invested amount: ${formatMoney(data.overdue.amount, unit)}`}
+          shown={data.overdue.rows.length}
+          exportHref="/api/export/actions?list=overdue"
+          excelHref="/api/export/actions?list=overdue&fmt=xlsx"
+          headers={['Investor', 'Project', 'Amount', 'Matured on', 'Days overdue', 'Bucket', 'Lifetime value', 'Investments']}
+          rows={data.overdue.rows.map((row) => [
+            <InvestorCell key={`investor-${row.orderId}`} investor={row} />,
+            row.project,
+            formatMoney(row.amount, unit),
+            row.maturity,
+            String(row.daysOverdue),
+            row.bucket,
+            formatMoney(row.lifetimeValue, unit),
+            formatInt(row.investments),
+          ])}
+          emptyText="No investments are more than 30 days past maturity."
         />
         <ActionListCard
           title="Cooling investors"

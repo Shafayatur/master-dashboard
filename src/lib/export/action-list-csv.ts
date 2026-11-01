@@ -1,7 +1,13 @@
 import type { ActionListsData, Contact, ListKey } from '@/lib/queries/action-lists';
 import { toCsv, type Column } from './csv';
 
-const TITLES: Record<ListKey, string> = { maturing: 'Maturing soon', cooling: 'Cooling investors', stuck: 'Stuck bookings', pending: 'Pending deposits' };
+const TITLES: Record<ListKey, string> = {
+  maturing: 'Maturing soon',
+  overdue: 'Overdue: status needs update',
+  cooling: 'Cooling investors',
+  stuck: 'Stuck bookings',
+  pending: 'Pending deposits',
+};
 
 const who = <T extends Contact>(): Column<T>[] => [
   { header: 'Name', value: (r) => r.name },
@@ -44,6 +50,16 @@ export function listExport(key: ListKey, d: ActionListsData): ListExport {
         { header: 'Last project', value: (r) => r.lastProject },
         { header: 'Matured on', value: (r) => r.lastMaturity, kind: 'date' },
         { header: 'Days since', value: (r) => r.daysSince, kind: 'int' },
+        { header: 'Lifetime value', value: (r) => r.lifetimeValue, kind: 'money' },
+        { header: 'Investments', value: (r) => r.investments, kind: 'int' },
+      ]);
+    case 'overdue':
+      return build(key, d.overdue.rows, [
+        { header: 'Project', value: (r) => r.project },
+        { header: 'Amount', value: (r) => r.amount, kind: 'money' },
+        { header: 'Maturity date', value: (r) => r.maturity, kind: 'date' },
+        { header: 'Days overdue', value: (r) => r.daysOverdue, kind: 'int' },
+        { header: 'Bucket', value: (r) => r.bucket },
         { header: 'Lifetime value', value: (r) => r.lifetimeValue, kind: 'money' },
         { header: 'Investments', value: (r) => r.investments, kind: 'int' },
       ]);

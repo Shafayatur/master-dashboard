@@ -7,7 +7,6 @@ import { Params, investorJoin, pgTs, salesBase, utcBounds, type QueryFn } from '
 
 export const REINVEST_WINDOW_DAYS = 30;
 const WEEKS = 12;
-const OVERDUE_DAYS = 30;
 
 export interface PayoutMonth {
   month: string;
@@ -124,9 +123,9 @@ async function maturity(q: QueryFn, now: string, today: string) {
 SELECT CASE WHEN maturity < $1::timestamp THEN 'overdue' ELSE to_char(date_trunc('week', ${dhakaTs('maturity')}), 'YYYY-MM-DD') END AS bucket,
   COUNT(*)::int AS n, COALESCE(SUM(amount), 0)::float8 AS amount
 FROM m
-WHERE maturity >= $1::timestamp - ($2::int * interval '1 day') AND maturity < $1::timestamp + ($3::int * interval '1 day')
+WHERE maturity < $1::timestamp + ($2::int * interval '1 day')
 GROUP BY 1`,
-    [now, OVERDUE_DAYS, WEEKS * 7],
+    [now, WEEKS * 7],
   );
   const first = mondayOf(today);
   const od = rows.find((x) => String(x.bucket) === 'overdue');
