@@ -25,6 +25,7 @@ import { buildInsights, type Insight } from '@/lib/dashboard/insights';
 import type { CommandCenterData } from '@/lib/dashboard/types';
 import { COMPARE_LABELS, PRESET_LABELS } from '@/lib/filters/dates';
 import { formatRange } from '@/lib/filters/format';
+import { commandCenterExportHref } from '@/lib/filters/command-center-export';
 import { serializeFilters, type Filters } from '@/lib/filters/schema';
 import { depositSliceHref, investorSegmentHref } from '@/lib/drilldown';
 import { deltaPct, formatInt, formatMoney, type MoneyUnit } from '@/lib/format/money';
@@ -323,9 +324,8 @@ export function CommandCenterView({ data, filters, unit, today }: { data: HomeDa
   }
 
   // Export URLs
-  const exportBase = `/api/export/explorer?t=deposits&from=${encodeURIComponent(data.range.from)}&to=${encodeURIComponent(data.range.to)}&p=custom`;
-  const csvHref = `${exportBase}&fmt=csv`;
-  const xlsxHref = `${exportBase}&fmt=xlsx`;
+  const csvHref = commandCenterExportHref(filters, data.range, 'csv');
+  const xlsxHref = commandCenterExportHref(filters, data.range, 'xlsx');
 
   // Delta helpers for row-2 KPIs
   const dSales = d(c.sales, p?.sales);
@@ -452,6 +452,11 @@ export function CommandCenterView({ data, filters, unit, today }: { data: HomeDa
               <div className="mt-4">
                 <ExportBar csvHref={csvHref} xlsxHref={xlsxHref} />
               </div>
+              {(filters.excludeReinvest || filters.orderStatus.length > 0) && (
+                <p className="mt-2 text-xs text-muted">
+                  Exports don&apos;t apply Exclude reinvest or order status filters, so the file may contain more rows than the cards above.
+                </p>
+              )}
             </div>
           </div>
         </div>

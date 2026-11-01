@@ -7,6 +7,24 @@ export const RETURN_TYPES = ['percentage-range', 'percentage', 'fixed'] as const
 export const SEGMENTS = ['active', 'recently_active', 'cooling', 'inactive', 'prospect'] as const;
 export const INVESTOR_KINDS = ['all', 'new', 'old'] as const;
 export const SHARIAH = ['all', 'yes', 'no'] as const;
+export const FILTER_QUERY_KEYS = {
+  preset: 'p',
+  from: 'from',
+  to: 'to',
+  compare: 'cmp',
+  depositStatus: 'ds',
+  orderStatus: 'os',
+  paymentMethod: 'pm',
+  excludeReinvest: 'xr',
+  products: 'prod',
+  categories: 'cat',
+  tenures: 'ten',
+  returnTypes: 'rt',
+  shariah: 'sh',
+  investorKind: 'ik',
+  segments: 'seg',
+} as const;
+export const GLOBAL_FILTER_QUERY_KEYS = Object.values(FILTER_QUERY_KEYS);
 
 export type DepositStatus = (typeof DEPOSIT_STATUSES)[number];
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
@@ -80,34 +98,34 @@ function ints(v: string | undefined, max = 200): number[] {
 export function parseFilters(input: Input, today: string): Filters {
   const get = getter(input);
 
-  let preset: PresetId | 'custom' = oneOf(PRESETS, get('p')) ?? DEFAULT_PRESET;
+  let preset: PresetId | 'custom' = oneOf(PRESETS, get(FILTER_QUERY_KEYS.preset)) ?? DEFAULT_PRESET;
   let range: DateRange;
-  if (get('p') === 'custom' && isValidYmd(get('from')) && isValidYmd(get('to'))) {
+  if (get(FILTER_QUERY_KEYS.preset) === 'custom' && isValidYmd(get(FILTER_QUERY_KEYS.from)) && isValidYmd(get(FILTER_QUERY_KEYS.to))) {
     preset = 'custom';
-    const [a, b] = [get('from')!, get('to')!];
+    const [a, b] = [get(FILTER_QUERY_KEYS.from)!, get(FILTER_QUERY_KEYS.to)!];
     range = a <= b ? { from: a, to: b } : { from: b, to: a };
   } else {
     range = resolvePreset(preset, today);
   }
-  const compare = oneOf(COMPARE_MODES, get('cmp')) ?? DEFAULT_COMPARE;
+  const compare = oneOf(COMPARE_MODES, get(FILTER_QUERY_KEYS.compare)) ?? DEFAULT_COMPARE;
 
-  const ds = list(DEPOSIT_STATUSES, get('ds'));
+  const ds = list(DEPOSIT_STATUSES, get(FILTER_QUERY_KEYS.depositStatus));
   return {
     preset,
     range,
     compare,
     compareRange: resolveCompare(range, compare),
     depositStatus: ds.length ? ds : [...DEFAULT_DEPOSIT_STATUS],
-    orderStatus: list(ORDER_STATUSES, get('os')),
-    paymentMethod: list(PAYMENT_METHODS, get('pm')),
-    excludeReinvest: get('xr') === '1',
-    products: ints(get('prod')),
-    categories: ints(get('cat')),
-    tenures: ints(get('ten'), 36),
-    returnTypes: list(RETURN_TYPES, get('rt')),
-    shariah: oneOf(SHARIAH, get('sh')) ?? 'all',
-    investorKind: oneOf(INVESTOR_KINDS, get('ik')) ?? 'all',
-    segments: list(SEGMENTS, get('seg')),
+    orderStatus: list(ORDER_STATUSES, get(FILTER_QUERY_KEYS.orderStatus)),
+    paymentMethod: list(PAYMENT_METHODS, get(FILTER_QUERY_KEYS.paymentMethod)),
+    excludeReinvest: get(FILTER_QUERY_KEYS.excludeReinvest) === '1',
+    products: ints(get(FILTER_QUERY_KEYS.products)),
+    categories: ints(get(FILTER_QUERY_KEYS.categories)),
+    tenures: ints(get(FILTER_QUERY_KEYS.tenures), 36),
+    returnTypes: list(RETURN_TYPES, get(FILTER_QUERY_KEYS.returnTypes)),
+    shariah: oneOf(SHARIAH, get(FILTER_QUERY_KEYS.shariah)) ?? 'all',
+    investorKind: oneOf(INVESTOR_KINDS, get(FILTER_QUERY_KEYS.investorKind)) ?? 'all',
+    segments: list(SEGMENTS, get(FILTER_QUERY_KEYS.segments)),
   };
 }
 
@@ -115,25 +133,25 @@ export function parseFilters(input: Input, today: string): Filters {
 export function serializeFilters(f: Filters): URLSearchParams {
   const q = new URLSearchParams();
   if (f.preset === 'custom') {
-    q.set('p', 'custom');
-    q.set('from', f.range.from);
-    q.set('to', f.range.to);
+    q.set(FILTER_QUERY_KEYS.preset, 'custom');
+    q.set(FILTER_QUERY_KEYS.from, f.range.from);
+    q.set(FILTER_QUERY_KEYS.to, f.range.to);
   } else if (f.preset !== DEFAULT_PRESET) {
-    q.set('p', f.preset);
+    q.set(FILTER_QUERY_KEYS.preset, f.preset);
   }
-  if (f.compare !== DEFAULT_COMPARE) q.set('cmp', f.compare);
+  if (f.compare !== DEFAULT_COMPARE) q.set(FILTER_QUERY_KEYS.compare, f.compare);
   const sameDs = f.depositStatus.length === 1 && f.depositStatus[0] === 'approved';
-  if (!sameDs) q.set('ds', f.depositStatus.join(','));
-  if (f.orderStatus.length) q.set('os', f.orderStatus.join(','));
-  if (f.paymentMethod.length) q.set('pm', f.paymentMethod.join(','));
-  if (f.excludeReinvest) q.set('xr', '1');
-  if (f.products.length) q.set('prod', f.products.join(','));
-  if (f.categories.length) q.set('cat', f.categories.join(','));
-  if (f.tenures.length) q.set('ten', f.tenures.join(','));
-  if (f.returnTypes.length) q.set('rt', f.returnTypes.join(','));
-  if (f.shariah !== 'all') q.set('sh', f.shariah);
-  if (f.investorKind !== 'all') q.set('ik', f.investorKind);
-  if (f.segments.length) q.set('seg', f.segments.join(','));
+  if (!sameDs) q.set(FILTER_QUERY_KEYS.depositStatus, f.depositStatus.join(','));
+  if (f.orderStatus.length) q.set(FILTER_QUERY_KEYS.orderStatus, f.orderStatus.join(','));
+  if (f.paymentMethod.length) q.set(FILTER_QUERY_KEYS.paymentMethod, f.paymentMethod.join(','));
+  if (f.excludeReinvest) q.set(FILTER_QUERY_KEYS.excludeReinvest, '1');
+  if (f.products.length) q.set(FILTER_QUERY_KEYS.products, f.products.join(','));
+  if (f.categories.length) q.set(FILTER_QUERY_KEYS.categories, f.categories.join(','));
+  if (f.tenures.length) q.set(FILTER_QUERY_KEYS.tenures, f.tenures.join(','));
+  if (f.returnTypes.length) q.set(FILTER_QUERY_KEYS.returnTypes, f.returnTypes.join(','));
+  if (f.shariah !== 'all') q.set(FILTER_QUERY_KEYS.shariah, f.shariah);
+  if (f.investorKind !== 'all') q.set(FILTER_QUERY_KEYS.investorKind, f.investorKind);
+  if (f.segments.length) q.set(FILTER_QUERY_KEYS.segments, f.segments.join(','));
   return q;
 }
 
