@@ -172,7 +172,8 @@ WHERE o."deletedAt" IS NULL AND o.status::text IN ('booked', 'verifying')
     ),
     q(
       `SELECT COUNT(*)::int AS n, COALESCE(SUM(r.amount), 0)::float8 AS amount
-FROM returns r WHERE r."deletedAt" IS NULL AND r.status::text = 'initiated'`,
+FROM returns r JOIN "order" o ON o.id = r."orderId" AND o."deletedAt" IS NULL ${investorJoin('o."userId"')}
+WHERE r."deletedAt" IS NULL AND r.status::text = 'initiated'`,
     ),
     q(
       `WITH sched AS (
