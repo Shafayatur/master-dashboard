@@ -10,7 +10,7 @@ import { TargetRemoveButton } from './target-remove-button';
 const card = 'rounded-xl border border-line bg-surface p-4';
 
 function formatMonth(month: string): string {
-  return new Intl.DateTimeFormat('en', { month: 'short', year: 'numeric' }).format(new Date(`${month}T00:00:00`));
+  return new Intl.DateTimeFormat('en', { month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${month}T00:00:00Z`));
 }
 
 export function TargetsView({ data, unit }: { data: TargetsOverview; unit: MoneyUnit }) {
@@ -43,7 +43,7 @@ export function TargetsView({ data, unit }: { data: TargetsOverview; unit: Money
       <div className="grid gap-4 xl:grid-cols-3">
         <TargetForm defaultMonth={data.currentMonth.slice(0, 7)} />
         <section className={`${card} xl:col-span-2`}>
-          <h3 className="text-sm font-medium">Last 12 months</h3>
+          <h3 className="text-sm font-medium">Recent and upcoming months</h3>
           <div className="mt-3 overflow-x-auto">
             <table className="w-full min-w-[760px] text-left text-sm">
               <thead className="text-xs uppercase tracking-wide text-muted">

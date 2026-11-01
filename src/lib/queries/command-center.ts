@@ -4,6 +4,7 @@ import { queryConfig } from '@/lib/db/config';
 import { querySource } from '@/lib/db/source';
 import type { CommandCenterData } from '@/lib/dashboard/types';
 import type { Filters } from '@/lib/filters/schema';
+import { TARGETS_CACHE_TAG } from '@/lib/targets/cache';
 import { loadCommandCenter } from './overview';
 import type { Row } from './sql-filters';
 
@@ -25,6 +26,6 @@ export function getCommandCenter(filters: Filters, today: string): Promise<Comma
   return unstable_cache(
     () => loadCommandCenter({ q: (sql, params) => querySource<Row>(sql, params), getTarget }, filters, today, new Date()),
     ['command-center', today, JSON.stringify(filters)],
-    { revalidate: TTL_SECONDS },
+    { revalidate: TTL_SECONDS, tags: [TARGETS_CACHE_TAG] },
   )();
 }

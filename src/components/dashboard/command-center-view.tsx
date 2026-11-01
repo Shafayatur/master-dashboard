@@ -90,7 +90,7 @@ function TargetCard({ data, unit }: { data: CommandCenterData; unit: MoneyUnit }
     return (
       <div className={cn(card, 'flex flex-col justify-center')}>
         <h3 className="text-sm font-medium">Monthly target</h3>
-        <p className="mt-2 text-sm text-muted">No target is set for this month yet. Until the Targets tab ships, add a row to the monthly_targets table and it will appear here.</p>
+        <p className="mt-2 text-sm text-muted">No target is set for this month yet. <Link href="/targets" className="hover:underline">Set one on the Targets tab.</Link></p>
       </div>
     );
   }
