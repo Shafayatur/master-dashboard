@@ -85,7 +85,7 @@ export function ActionsView({ data, unit }: { data: ActionListsData; unit: Money
       <div className="grid gap-4 xl:grid-cols-2">
         <ActionListCard
           title="Maturing soon"
-          description="Running investments reaching maturity. A good moment to talk about reinvestment. Negative days mean the maturity date has passed but the order is still marked invested."
+          description="Running investments reaching maturity within the selected window. A good moment to talk about reinvestment."
           total={data.maturing.total}
           amountLabel={`Invested amount: ${formatMoney(data.maturing.amount, unit)}`}
           shown={data.maturing.rows.length}
@@ -105,7 +105,7 @@ export function ActionsView({ data, unit }: { data: ActionListsData; unit: Money
         />
         <ActionListCard
           title="Overdue: status needs update"
-          description="Invested orders more than 30 days past maturity. Update the stale order status."
+          description="Invested orders past their maturity date (1–30, 31–90, and 90+ days). Follow up on payout or update the stale order status."
           total={data.overdue.total}
           amountLabel={`Invested amount: ${formatMoney(data.overdue.amount, unit)}`}
           shown={data.overdue.rows.length}
@@ -123,7 +123,7 @@ export function ActionsView({ data, unit }: { data: ActionListsData; unit: Money
             formatMoney(row.lifetimeValue, unit),
             formatInt(row.investments),
           ])}
-          emptyText="No investments are more than 30 days past maturity."
+          emptyText="No investments are past maturity."
         />
         <ActionListCard
           title="Cooling investors"

@@ -46,19 +46,20 @@ beforeAll(async () => {
 });
 
 describe('overdue investments', () => {
-  it('separates recent maturity from stale invested orders and counts all past maturities', async () => {
+  it('lists all past-maturity invested orders and aligns with Money Flow totals', async () => {
     const actions = await loadActionLists(q, NOW, { maturingDays: 14, limit: 50 });
-    expect(actions.maturing.rows.map(({ orderId, daysLeft }) => [orderId, daysLeft])).toEqual([[10, -10]]);
+    expect(actions.maturing.rows).toEqual([]);
     expect(actions.overdue.rows.map(({ orderId, daysOverdue, bucket }) => [orderId, daysOverdue, bucket])).toEqual([
       [12, 120, '90+'],
       [11, 45, '31-90'],
+      [10, 10, '1-30'],
     ]);
-    expect(actions.overdue.total).toBe(2);
-    expect(actions.overdue.amount).toBe(500);
-    expect(actions.maturing.rows.some((row) => actions.overdue.rows.some((overdueRow) => overdueRow.orderId === row.orderId))).toBe(false);
+    expect(actions.overdue.total).toBe(3);
+    expect(actions.overdue.amount).toBe(600);
 
     const flow = await loadMoneyFlow(q, RANGE, TODAY, NOW);
     expect(flow.maturity.overdue).toEqual({ count: 3, amount: 600 });
+    expect(actions.overdue).toMatchObject({ total: flow.maturity.overdue.count, amount: flow.maturity.overdue.amount });
   });
 
   it('exports the overdue list', async () => {
