@@ -8,6 +8,7 @@ import { CountUp } from './count-up';
 import { PageTools } from './page-tools';
 
 const windows = [7, 14, 30] as const;
+const SHOW_OVERDUE_UI = false;
 
 function InvestorCell({ investor }: { investor: Contact }) {
   return (
@@ -32,7 +33,9 @@ function InvestorCell({ investor }: { investor: Contact }) {
 export function ActionsView({ data, unit }: { data: ActionListsData; unit: MoneyUnit }) {
   const kpis = [
     { label: 'Maturing soon', total: data.maturing.total, amount: data.maturing.amount, icon: CalendarClock, tone: 'blue' as const },
-    { label: 'Overdue: status needs update', total: data.overdue.total, amount: data.overdue.amount, icon: AlertTriangle, tone: 'rose' as const },
+    ...(SHOW_OVERDUE_UI
+      ? [{ label: 'Overdue: status needs update', total: data.overdue.total, amount: data.overdue.amount, icon: AlertTriangle, tone: 'rose' as const }]
+      : []),
     { label: 'Cooling investors', total: data.cooling.total, amount: data.cooling.amount, icon: Snowflake, tone: 'amber' as const },
     { label: 'Stuck bookings', total: data.stuck.total, amount: data.stuck.amount, icon: Clock, tone: 'violet' as const },
     { label: 'Pending deposits', total: data.pending.total, amount: data.pending.amount, icon: Hourglass, tone: 'rose' as const },
@@ -48,7 +51,7 @@ export function ActionsView({ data, unit }: { data: ActionListsData; unit: Money
         <PageTools generatedAt={data.generatedAt} unit={unit} />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className={`grid gap-4 sm:grid-cols-2 ${SHOW_OVERDUE_UI ? 'xl:grid-cols-5' : 'xl:grid-cols-4'}`}>
         {kpis.map(({ label, total, amount, icon, tone }, index) => (
           <KpiCard
             key={label}
@@ -85,7 +88,7 @@ export function ActionsView({ data, unit }: { data: ActionListsData; unit: Money
       <div className="grid gap-4 xl:grid-cols-2">
         <ActionListCard
           title="Maturing soon"
-          description="Running investments reaching maturity within the selected window. A good moment to talk about reinvestment."
+          description="Active orders reaching maturity in the next 30 days."
           total={data.maturing.total}
           amountLabel={`Invested amount: ${formatMoney(data.maturing.amount, unit)}`}
           shown={data.maturing.rows.length}
@@ -103,6 +106,7 @@ export function ActionsView({ data, unit }: { data: ActionListsData; unit: Money
           ])}
           emptyText="No investments are maturing in this window."
         />
+        {SHOW_OVERDUE_UI && (
         <ActionListCard
           title="Overdue: status needs update"
           description="Invested orders past their maturity date (1–30, 31–90, and 90+ days). Follow up on payout or update the stale order status."
@@ -125,6 +129,7 @@ export function ActionsView({ data, unit }: { data: ActionListsData; unit: Money
           ])}
           emptyText="No investments are past maturity."
         />
+        )}
         <ActionListCard
           title="Cooling investors"
           description="Nothing running; the last project matured 30 to 60 days ago. Reach out before they turn inactive."

@@ -20,6 +20,8 @@ interface Props {
   filters: Filters;
 }
 
+const SHOW_OVERDUE_UI = false;
+
 const toneColor = {
   good: 'bg-emerald-500',
   warn: 'bg-amber-500',
@@ -36,7 +38,7 @@ function payoutMonthLabel(ymd: string): string {
 }
 
 export function MoneyFlowView({ data, unit, filters }: Props) {
-  const insights = buildMoneyFlowInsights(data, unit);
+  const insights = buildMoneyFlowInsights(data, unit).filter((i) => SHOW_OVERDUE_UI || !i.text.includes('past maturity'));
   const scheduleCoverage = data.schedule.coverage;
   const lowCoverage = scheduleCoverage.invested > 0 && scheduleCoverage.withSchedule / scheduleCoverage.invested < 0.7;
   const conversion = data.conversion;
@@ -90,7 +92,9 @@ export function MoneyFlowView({ data, unit, filters }: Props) {
     { label: 'Paid out in period', value: conversion.paidAmount, hint: `${formatInt(conversion.paidInvestors)} investors`, icon: Send, tone: 'emerald' as const },
     { label: 'In flight', value: data.inFlight.amount, hint: `${formatInt(data.inFlight.count)} payouts`, icon: Hourglass, tone: 'amber' as const },
     { label: 'Maturing in 4 weeks', value: maturingInFourWeeks, hint: 'principal due', icon: CalendarClock, tone: 'blue' as const },
-    { label: 'Overdue count', value: data.maturity.overdue.count, hint: formatMoney(data.maturity.overdue.amount, unit), icon: Wallet, tone: 'violet' as const, kind: 'int' as const },
+    ...(SHOW_OVERDUE_UI
+      ? [{ label: 'Overdue count', value: data.maturity.overdue.count, hint: formatMoney(data.maturity.overdue.amount, unit), icon: Wallet, tone: 'violet' as const, kind: 'int' as const }]
+      : []),
   ];
 
   return (
@@ -237,7 +241,7 @@ export function MoneyFlowView({ data, unit, filters }: Props) {
       </div>
 
       <ChartCard title="Maturity calendar (principal reaching maturity)">
-        {data.maturity.overdue.count > 0 && (
+        {SHOW_OVERDUE_UI && data.maturity.overdue.count > 0 && (
           <p className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
             {formatInt(data.maturity.overdue.count)} investments worth {formatMoney(data.maturity.overdue.amount, unit)} are past maturity but still marked invested.
           </p>
