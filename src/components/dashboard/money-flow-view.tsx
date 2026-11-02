@@ -1,4 +1,5 @@
 import { CalendarClock, Hourglass, Send, Wallet } from 'lucide-react';
+import { AreaChart } from '@/components/charts/area-chart';
 import { CHART_COLORS } from '@/components/charts/chart-colors';
 import { ChartCard } from '@/components/charts/chart-card';
 import { DonutChart, DonutLegend } from '@/components/charts/donut-chart';
@@ -62,6 +63,15 @@ export function MoneyFlowView({ data, unit, filters }: Props) {
     { key: 'other', label: 'Other approved investment', value: otherApproved, color: CHART_COLORS[5] },
   ];
   const reinvestByKey = new Map(reinvestSlices.map((slice) => [slice.key, slice.value]));
+  const cashFlowTotals = data.cashFlowByMonth.reduce(
+    (totals, month) => ({
+      moneyIn: totals.moneyIn + month.moneyIn,
+      reinvest: totals.reinvest + month.reinvest,
+      moneyOut: totals.moneyOut + month.moneyOut,
+      net: totals.net + month.net,
+    }),
+    { moneyIn: 0, reinvest: 0, moneyOut: 0, net: 0 },
+  );
   const kpis = [
     { label: 'Paid out in period', value: conversion.paidAmount, hint: `${formatInt(conversion.paidInvestors)} investors`, icon: Send, tone: 'emerald' as const },
     { label: 'In flight', value: data.inFlight.amount, hint: `${formatInt(data.inFlight.count)} payouts`, icon: Hourglass, tone: 'amber' as const },
@@ -102,6 +112,80 @@ export function MoneyFlowView({ data, unit, filters }: Props) {
           </ul>
         </section>
       )}
+
+      <ChartCard
+        title="Cash flow by month"
+        subtitle="All months since the first activity. Money in = approved deposits; money out = completed payouts. Ignores filters."
+        action={
+          <div className="flex gap-2 print:hidden">
+            <a
+              href="/api/export/cash-flow?fmt=csv"
+              download
+              className="rounded-md border border-line px-2 py-1 text-xs hover:text-fg"
+            >
+              Export CSV
+            </a>
+            <a
+              href="/api/export/cash-flow?fmt=xlsx"
+              download
+              className="rounded-md border border-line px-2 py-1 text-xs hover:text-fg"
+            >
+              Export Excel
+            </a>
+          </div>
+        }
+      >
+        <AreaChart
+          labels={data.cashFlowByMonth.map((month) => month.month)}
+          bucket="month"
+          unit={unit}
+          series={[
+            {
+              key: 'money-in',
+              label: 'Money in',
+              values: data.cashFlowByMonth.map((month) => month.moneyIn),
+              color: CHART_COLORS[0],
+            },
+            {
+              key: 'money-out',
+              label: 'Money out',
+              values: data.cashFlowByMonth.map((month) => month.moneyOut),
+              color: CHART_COLORS[1],
+            },
+          ]}
+        />
+        <div className="mt-4 max-h-96 overflow-auto">
+          <table className="w-full min-w-[620px] text-sm">
+            <thead className="sticky top-0 z-10 bg-surface text-left text-xs uppercase text-muted">
+              <tr>
+                <th scope="col" className="py-2 pr-3 font-medium">Month</th>
+                <th scope="col" className="px-3 py-2 text-right font-medium">Money in</th>
+                <th scope="col" className="px-3 py-2 text-right font-medium">Of which reinvest</th>
+                <th scope="col" className="px-3 py-2 text-right font-medium">Money out</th>
+                <th scope="col" className="px-3 py-2 text-right font-medium">Net</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...data.cashFlowByMonth].reverse().map((month) => (
+                <tr key={month.month} className="border-t border-line">
+                  <th scope="row" className="py-2 pr-3 text-left font-normal">{payoutMonthLabel(month.month)}</th>
+                  <td className="px-3 py-2 text-right tabular-nums">{formatMoney(month.moneyIn, unit)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{formatMoney(month.reinvest, unit)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{formatMoney(month.moneyOut, unit)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{formatMoney(month.net, unit)}</td>
+                </tr>
+              ))}
+              <tr className="border-t-2 border-line font-medium">
+                <th scope="row" className="py-2 pr-3 text-left">Total</th>
+                <td className="px-3 py-2 text-right tabular-nums">{formatMoney(cashFlowTotals.moneyIn, unit)}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{formatMoney(cashFlowTotals.reinvest, unit)}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{formatMoney(cashFlowTotals.moneyOut, unit)}</td>
+                <td className="px-3 py-2 text-right tabular-nums">{formatMoney(cashFlowTotals.net, unit)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </ChartCard>
 
       <div className="grid gap-4 xl:grid-cols-2">
         <ChartCard title="Payouts by month">
