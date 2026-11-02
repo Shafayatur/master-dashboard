@@ -64,6 +64,8 @@ Observed 2026-10-14: confirmed reinvest deposits are 34 (about 0.2% of sales), s
 
 ## Money out
 Paid = `returns.status = 'completed'` by `returns."date"`; in flight = `initiated`; upcoming = `return_schedules."paymentDate"`.
+- **Running investment value** = `order."totalAmount"` summed across live investor orders with status `invested` whose maturity is on or after now. Maturity is the latest schedule payment date when a schedule exists, otherwise investment date plus product tenure; overdue orders are excluded.
+- **Scheduled payout liability** = future schedule installments (`return_schedules."paymentDate" >= now`) for those running investments, summed from `totalAmount` (principal plus profit). The card also shows installment count and principal/profit subtotals.
 
 ## Cash flow by month
 - Whole-life monthly view: starts at the first Dhaka month with qualifying activity and runs through the current month, capped at today. Months between first activity and today are zero-filled. The first activity month is computed from approved deposits and completed payouts on live investor users and live orders.

@@ -1,4 +1,4 @@
-import { CalendarClock, Hourglass, Send, Wallet } from 'lucide-react';
+import { Banknote, CalendarClock, CalendarDays, Hourglass, Send, Wallet } from 'lucide-react';
 import { AreaChart } from '@/components/charts/area-chart';
 import { CHART_COLORS } from '@/components/charts/chart-colors';
 import { ChartCard } from '@/components/charts/chart-card';
@@ -73,6 +73,20 @@ export function MoneyFlowView({ data, unit, filters }: Props) {
     { moneyIn: 0, reinvest: 0, moneyOut: 0, net: 0 },
   );
   const kpis = [
+    {
+      label: 'Running investment value',
+      value: data.running.amount,
+      hint: `${formatInt(data.running.orders)} orders · ${formatInt(data.running.investors)} investors`,
+      icon: Banknote,
+      tone: 'emerald' as const,
+    },
+    {
+      label: 'Scheduled payout liability',
+      value: data.running.scheduledPayouts.total,
+      hint: `${formatInt(data.running.scheduledPayouts.installments)} installments · principal ${formatMoney(data.running.scheduledPayouts.principal, unit)} · profit ${formatMoney(data.running.scheduledPayouts.profit, unit)}`,
+      icon: CalendarDays,
+      tone: 'blue' as const,
+    },
     { label: 'Paid out in period', value: conversion.paidAmount, hint: `${formatInt(conversion.paidInvestors)} investors`, icon: Send, tone: 'emerald' as const },
     { label: 'In flight', value: data.inFlight.amount, hint: `${formatInt(data.inFlight.count)} payouts`, icon: Hourglass, tone: 'amber' as const },
     { label: 'Maturing in 4 weeks', value: maturingInFourWeeks, hint: 'principal due', icon: CalendarClock, tone: 'blue' as const },
@@ -91,7 +105,7 @@ export function MoneyFlowView({ data, unit, filters }: Props) {
         <PageTools generatedAt={data.generatedAt} unit={unit} />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         {kpis.map(({ label, value, hint, icon, tone, kind }, index) => (
           <KpiCard key={label} i={index} icon={icon} tone={tone} label={label} hint={hint}>
             <CountUp value={value} kind={kind ?? 'money'} unit={unit} />

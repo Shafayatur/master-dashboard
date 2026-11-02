@@ -64,6 +64,18 @@ export interface MoneyFlowData {
     complete60: boolean;
     complete90: boolean;
   };
+  running: {
+    orders: number;
+    investors: number;
+    amount: number;
+    withSchedule: number;
+    scheduledPayouts: {
+      installments: number;
+      total: number;
+      principal: number;
+      profit: number;
+    };
+  };
 }
 
 const num = (v: unknown): number => Number(v ?? 0);
@@ -205,6 +217,58 @@ GROUP BY 1`,
   };
 }
 
+async function runningPortfolio(q: QueryFn, now: string): Promise<MoneyFlowData['running']> {
+  const [row] = await q(
+    `WITH sched AS MATERIALIZED (
+  SELECT "orderId",
+    MAX("paymentDate") AS last_pay,
+    COUNT(*) FILTER (WHERE "paymentDate" >= $1::timestamp)::int AS future_installments,
+    COALESCE(SUM("totalAmount") FILTER (WHERE "paymentDate" >= $1::timestamp), 0)::float8 AS future_total,
+    COALESCE(SUM("principalAmount") FILTER (WHERE "paymentDate" >= $1::timestamp), 0)::float8 AS future_principal,
+    COALESCE(SUM("profitAmount") FILTER (WHERE "paymentDate" >= $1::timestamp), 0)::float8 AS future_profit
+  FROM return_schedules
+  WHERE "deletedAt" IS NULL
+  GROUP BY "orderId"
+), active_orders AS (
+  SELECT o.id, o."userId", o."totalAmount" AS amount,
+    (s."orderId" IS NOT NULL) AS has_schedule,
+    COALESCE(s.future_installments, 0) AS future_installments,
+    COALESCE(s.future_total, 0) AS future_total,
+    COALESCE(s.future_principal, 0) AS future_principal,
+    COALESCE(s.future_profit, 0) AS future_profit,
+    COALESCE(s.last_pay, o."investmentDate" + (split_part(p."productDuration"::text, ' ', 1)::int * interval '1 month')) AS maturity
+  FROM "order" o
+  JOIN products p ON p.id = o."productId"
+  ${investorJoin('o."userId"')}
+  LEFT JOIN sched s ON s."orderId" = o.id
+  WHERE o."deletedAt" IS NULL AND o.status::text = 'invested'
+)
+SELECT COUNT(*)::int AS orders,
+  COUNT(DISTINCT "userId")::int AS investors,
+  COALESCE(SUM(amount), 0)::float8 AS amount,
+  COUNT(*) FILTER (WHERE has_schedule)::int AS with_schedule,
+  COALESCE(SUM(future_installments), 0)::int AS installments,
+  COALESCE(SUM(future_total), 0)::float8 AS scheduled_total,
+  COALESCE(SUM(future_principal), 0)::float8 AS scheduled_principal,
+  COALESCE(SUM(future_profit), 0)::float8 AS scheduled_profit
+FROM active_orders
+WHERE maturity >= $1::timestamp`,
+    [now],
+  );
+  return {
+    orders: num(row?.orders),
+    investors: num(row?.investors),
+    amount: num(row?.amount),
+    withSchedule: num(row?.with_schedule),
+    scheduledPayouts: {
+      installments: num(row?.installments),
+      total: num(row?.scheduled_total),
+      principal: num(row?.scheduled_principal),
+      profit: num(row?.scheduled_profit),
+    },
+  };
+}
+
 async function reinvestment(q: QueryFn, range: DateRange, today: string) {
   const neutral = { ...parseFilters(new URLSearchParams(), today), range };
   const p = new Params();
@@ -289,7 +353,7 @@ FROM fp_with_next_dep`,
 
 export async function loadMoneyFlow(q: QueryFn, range: DateRange, today: string, now: Date): Promise<MoneyFlowData> {
   const nowTs = pgTs(now);
-  const [pm, cashFlow, att, sch, mat, re, conv] = await Promise.all([
+  const [pm, cashFlow, att, sch, mat, re, conv, running] = await Promise.all([
     payoutsByMonth(q, today),
     cashFlowByMonth(q, today),
     attention(q, now),
@@ -297,6 +361,7 @@ export async function loadMoneyFlow(q: QueryFn, range: DateRange, today: string,
     maturity(q, nowTs, today),
     reinvestment(q, range, today),
     conversion(q, range, today),
+    runningPortfolio(q, nowTs),
   ]);
   return {
     generatedAt: now.toISOString(),
@@ -309,5 +374,6 @@ export async function loadMoneyFlow(q: QueryFn, range: DateRange, today: string,
     maturity: mat,
     reinvest: re,
     conversion: conv,
+    running,
   };
 }
