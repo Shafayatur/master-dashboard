@@ -13,6 +13,13 @@ export interface PayoutMonth {
   completed: { count: number; amount: number };
   initiated: { count: number; amount: number };
 }
+export interface CashFlowMonth {
+  month: string;
+  moneyIn: number;
+  reinvest: number;
+  moneyOut: number;
+  net: number;
+}
 export interface ScheduleWeek {
   week: string;
   count: number;
@@ -35,6 +42,7 @@ export interface MoneyFlowData {
   range: DateRange;
   windowDays: number;
   payoutsByMonth: PayoutMonth[];
+  cashFlowByMonth: CashFlowMonth[];
   inFlight: { count: number; amount: number };
   schedule: { weeks: ScheduleWeek[]; coverage: { invested: number; withSchedule: number } };
   maturity: { overdue: { count: number; amount: number }; weeks: MaturityWeek[] };
@@ -83,6 +91,64 @@ WHERE r."deletedAt" IS NULL AND r."date" >= ${p.add(start)}::timestamp AND r."da
       return { count: num(r?.n), amount: num(r?.amount) };
     };
     return { month, completed: pick('completed'), initiated: pick('initiated') };
+  });
+}
+
+/** Whole-life monthly cash flow from the first eligible activity through today, zero-filled by Dhaka month. */
+export async function cashFlowByMonth(q: QueryFn, today: string): Promise<CashFlowMonth[]> {
+  const { end } = utcBounds({ from: today, to: today });
+  const p = new Params();
+  const endTs = `${p.add(end)}::timestamp`;
+  const todayDate = `${p.add(today)}::date`;
+  const rows = await q(
+    `WITH activity AS (
+  SELECT ${dhakaTs('d."date"')} AS activity_date
+  FROM deposits d JOIN "order" o ON o.id = d."orderId" AND o."deletedAt" IS NULL ${investorJoin('o."userId"')}
+  WHERE d."deletedAt" IS NULL AND d.status::text = 'approved' AND d."date" < ${endTs}
+  UNION ALL
+  SELECT ${dhakaTs('r."date"')} AS activity_date
+  FROM returns r JOIN "order" o ON o.id = r."orderId" AND o."deletedAt" IS NULL ${investorJoin('o."userId"')}
+  WHERE r."deletedAt" IS NULL AND r.status::text = 'completed' AND r."date" < ${endTs}
+), first_month AS (
+  SELECT date_trunc('month', MIN(activity_date)) AS month FROM activity
+), month_series AS (
+  SELECT generate_series(first_month.month, date_trunc('month', ${todayDate}::timestamp), interval '1 month') AS month
+  FROM first_month WHERE first_month.month IS NOT NULL
+), money_in AS (
+  SELECT to_char(date_trunc('month', ${dhakaTs('d."date"')}), 'YYYY-MM-DD') AS month,
+    COALESCE(SUM(d.amount), 0)::float8 AS amount,
+    COALESCE(SUM(d.amount) FILTER (WHERE d."paymentMethod"::text = 'reinvest'), 0)::float8 AS reinvest
+  FROM deposits d JOIN "order" o ON o.id = d."orderId" AND o."deletedAt" IS NULL ${investorJoin('o."userId"')}
+  WHERE d."deletedAt" IS NULL AND d.status::text = 'approved'
+    AND d."date" < ${endTs}
+  GROUP BY 1
+), money_out AS (
+  SELECT to_char(date_trunc('month', ${dhakaTs('r."date"')}), 'YYYY-MM-DD') AS month,
+    COALESCE(SUM(r.amount), 0)::float8 AS amount
+  FROM returns r JOIN "order" o ON o.id = r."orderId" AND o."deletedAt" IS NULL ${investorJoin('o."userId"')}
+  WHERE r."deletedAt" IS NULL AND r.status::text = 'completed'
+    AND r."date" < ${endTs}
+  GROUP BY 1
+)
+SELECT to_char(ms.month, 'YYYY-MM-DD') AS month, COALESCE(i.amount, 0)::float8 AS money_in,
+  COALESCE(i.reinvest, 0)::float8 AS reinvest, COALESCE(o.amount, 0)::float8 AS money_out
+FROM month_series ms
+LEFT JOIN money_in i ON i.month = to_char(ms.month, 'YYYY-MM-DD')
+LEFT JOIN money_out o ON o.month = to_char(ms.month, 'YYYY-MM-DD')
+ORDER BY ms.month`,
+    p.values,
+  );
+  return rows.map((row) => {
+    const moneyIn = num(row?.money_in);
+    const reinvest = num(row?.reinvest);
+    const moneyOut = num(row?.money_out);
+    return {
+      month: String(row.month),
+      moneyIn,
+      reinvest,
+      moneyOut,
+      net: moneyIn - moneyOut,
+    };
   });
 }
 
@@ -202,8 +268,9 @@ SELECT COUNT(*)::int AS paid_investors, COALESCE(SUM(paid), 0)::float8 AS paid_a
 
 export async function loadMoneyFlow(q: QueryFn, range: DateRange, today: string, now: Date): Promise<MoneyFlowData> {
   const nowTs = pgTs(now);
-  const [pm, att, sch, mat, re, conv] = await Promise.all([
+  const [pm, cashFlow, att, sch, mat, re, conv] = await Promise.all([
     payoutsByMonth(q, today),
+    cashFlowByMonth(q, today),
     attention(q, now),
     schedule(q, nowTs, today),
     maturity(q, nowTs, today),
@@ -215,6 +282,7 @@ export async function loadMoneyFlow(q: QueryFn, range: DateRange, today: string,
     range,
     windowDays: REINVEST_WINDOW_DAYS,
     payoutsByMonth: pm,
+    cashFlowByMonth: cashFlow,
     inFlight: { count: att.payoutsInFlight.count, amount: att.payoutsInFlight.amount },
     schedule: sch,
     maturity: mat,

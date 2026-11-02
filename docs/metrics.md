@@ -65,6 +65,13 @@ Observed 2026-10-14: confirmed reinvest deposits are 34 (about 0.2% of sales), s
 ## Money out
 Paid = `returns.status = 'completed'` by `returns."date"`; in flight = `initiated`; upcoming = `return_schedules."paymentDate"`.
 
+## Cash flow by month
+- Whole-life monthly view: starts at the first Dhaka month with qualifying activity and runs through the current month, capped at today. Months between first activity and today are zero-filled. The first activity month is computed from approved deposits and completed payouts on live investor users and live orders.
+- Money in = approved, non-deleted deposits on non-deleted orders belonging to live investor users, by `deposits."date"`. Reinvest is the portion where `deposits."paymentMethod" = 'reinvest'`.
+- Money out = completed, non-deleted payouts joined to non-deleted orders and live investor users, by `returns."date"`.
+- Net = money in minus money out.
+- Ignores dashboard filters.
+
 ## Targets
 Entered manually per month (`monthly_targets`, Neon). Achievement = month-to-date sales / target.
 
