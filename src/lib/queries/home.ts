@@ -122,15 +122,17 @@ WHERE ${preds.join(' AND ')} GROUP BY 1`,
   return new Map(rows.map((r) => [String(r.label), num(r.n)]));
 }
 
-/** Completed payouts per bucket (returns.status 'completed', returns."date"), investors only, no product filters. */
+/** Completed payouts per bucket (returns.status 'completed', returns."date"), investors only, no product filters; excludeReinvest applies. */
 async function payoutBuckets(q: QueryFn, f: Filters, bucket: Bucket): Promise<Map<string, number>> {
   const p = new Params();
   const { start, end } = utcBounds(f.range);
+  const excludeReinvest = f.excludeReinvest ? `AND r."paymentMethod"::text IS DISTINCT FROM 'reinvest'` : '';
   const rows = await q(
     `SELECT ${bucketOf(bucket, 'r."date"')} AS label, SUM(r.amount)::float8 AS amount
 FROM returns r JOIN "order" o ON o.id = r."orderId" AND o."deletedAt" IS NULL ${investorJoin('o."userId"')}
 WHERE r."deletedAt" IS NULL AND r.status::text = 'completed'
-  AND r."date" >= ${p.add(start)}::timestamp AND r."date" < ${p.add(end)}::timestamp GROUP BY 1`,
+  AND r."date" >= ${p.add(start)}::timestamp AND r."date" < ${p.add(end)}::timestamp
+  ${excludeReinvest} GROUP BY 1`,
     p.values,
   );
   return new Map(rows.map((r) => [String(r.label), num(r.amount)]));
@@ -207,12 +209,13 @@ GROUP BY c.id, c.name ORDER BY value DESC, c.id`,
 }
 
 /**
- * Completed payouts in the range by the paid order's product category, top 5 plus "Others". Investors only; the global
- * filters are not applied. Like sales by category, a product in several categories counts in each of them.
+ * Completed payouts in the range by the paid order's product category, top 5 plus "Others". Investors only; dashboard
+ * filters do not apply except excludeReinvest. Like sales by category, a product in several categories counts in each.
  */
 export async function payoutsByCategory(q: QueryFn, f: Filters): Promise<DonutRow[]> {
   const p = new Params();
   const { start, end } = utcBounds(f.range);
+  const excludeReinvest = f.excludeReinvest ? `AND r."paymentMethod"::text IS DISTINCT FROM 'reinvest'` : '';
   const rows = await q(
     `SELECT c.id::text AS key, c.name AS label, SUM(r.amount)::float8 AS value
 FROM returns r JOIN "order" o ON o.id = r."orderId" AND o."deletedAt" IS NULL ${investorJoin('o."userId"')}
@@ -220,6 +223,7 @@ JOIN category_products cp ON cp."productsId" = o."productId"
 JOIN categories c ON c.id = cp."categoriesId" AND c."deletedAt" IS NULL
 WHERE r."deletedAt" IS NULL AND r.status::text = 'completed'
   AND r."date" >= ${p.add(start)}::timestamp AND r."date" < ${p.add(end)}::timestamp
+  ${excludeReinvest}
 GROUP BY c.id, c.name ORDER BY value DESC, c.id`,
     p.values,
   );

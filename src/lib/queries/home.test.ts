@@ -89,19 +89,19 @@ beforeAll(async () => {
       (22, '2026-04-30 19:00',   999, 'bank_deposit', 'approved', 3),
       (23, '2026-04-30 17:00',   777, 'bank_deposit', 'approved', 3),
       (24, '2026-10-10 19:00',   123, 'bank_deposit', 'approved', 6);
-    INSERT INTO returns (id, "date", amount, status, "orderId") VALUES
-      (1,  '2026-09-20 00:00',  500, 'completed', 3),
-      (2,  '2026-10-12 00:00',  800, 'initiated', 2),
-      (3,  '2026-10-02 12:00', 1200, 'completed', 1),
-      (4,  '2026-09-30 19:00',  300, 'completed', 3),
-      (5,  '2026-10-05 00:00',  900, 'completed', 2),
-      (6,  '2026-10-05 05:00',  100, 'completed', 9),
-      (7,  '2026-10-10 20:30',   50, 'completed', 1),
-      (8,  '2026-10-03 00:00',  400, 'completed', 6),
-      (9,  '2026-10-03 00:00',  250, 'completed', 1),
-      (10, '2026-10-04 00:00',   80, 'completed', 4),
-      (11, '2026-10-06 22:00',   60, 'completed', 7),
-      (12, '2026-10-08 01:00',   40, 'completed', 8);
+    INSERT INTO returns (id, "date", amount, "paymentMethod", status, "orderId") VALUES
+      (1,  '2026-09-20 00:00',  500, NULL, 'completed', 3),
+      (2,  '2026-10-12 00:00',  800, NULL, 'initiated', 2),
+      (3,  '2026-10-02 12:00', 1200, 'bank_transfer', 'completed', 1),
+      (4,  '2026-09-30 19:00',  300, NULL, 'completed', 3),
+      (5,  '2026-10-05 00:00',  900, 'reinvest', 'completed', 2),
+      (6,  '2026-10-05 05:00',  100, NULL, 'completed', 9),
+      (7,  '2026-10-10 20:30',   50, NULL, 'completed', 1),
+      (8,  '2026-10-03 00:00',  400, NULL, 'completed', 6),
+      (9,  '2026-10-03 00:00',  250, NULL, 'completed', 1),
+      (10, '2026-10-04 00:00',   80, NULL, 'completed', 4),
+      (11, '2026-10-06 22:00',   60, NULL, 'completed', 7),
+      (12, '2026-10-08 01:00',   40, NULL, 'completed', 8);
   `);
 });
 
@@ -161,11 +161,18 @@ describe('loadHome: sparklines (daily, 1-10 Oct, aligned with series)', () => {
     expect(d.payouts).toEqual([300, 1200, 250, 80, 1000, 0, 60, 40, 0, 0]);
   });
 
-  it('global filters apply to the sales sparklines but not to registrations or payouts', async () => {
+  it('excludeReinvest removes reinvest payouts while preserving NULL and other payment methods', async () => {
+    const excluded = await home('xr=1');
+    expect(excluded.payouts).toEqual([300, 1200, 250, 80, 100, 0, 60, 40, 0, 0]);
+    expect(excluded.payouts[1]).toBe(d.payouts[1]); // bank_transfer
+    expect(excluded.payouts[4]).toBe(100); // NULL method remains, reinvest amount is removed
+  });
+
+  it('global filters apply to the sales sparklines; xr also applies to payouts', async () => {
     const x = await home('xr=1');
     expect(x.kpiSpark.sales).toEqual([1000, 4000, 10000, 0, 500, 7800, 0, 3600, 2000, 1500]); // the 20000 reinvest deposit is gone
     expect(x.kpiSpark.registrations).toEqual(d.kpiSpark.registrations);
-    expect(x.payouts).toEqual(d.payouts);
+    expect(x.payouts[4]).toBe(100);
 
     const p = await home('prod=1');
     expect(p.kpiSpark.sales).toEqual([0, 0, 10000, 0, 0, 800, 0, 0, 0, 0]);
@@ -263,6 +270,14 @@ describe('loadHome: donuts', () => {
       ['7', 'Honey', 100],
       ['4', 'Goat', 80],
       ['others', 'Others', 100], // Rice 60 + Corn 40
+    ]);
+    expectDonut((await home('xr=1')).payoutsByCategory, [
+      ['1', 'Dairy', 1450], // bank_transfer and NULL-method payouts remain; reinvest is removed
+      ['3', 'Fish', 300],
+      ['7', 'Honey', 100],
+      ['4', 'Goat', 80],
+      ['5', 'Rice', 60],
+      ['others', 'Others', 40], // Corn
     ]);
   });
 
