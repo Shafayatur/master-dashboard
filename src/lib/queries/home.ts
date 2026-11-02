@@ -80,7 +80,7 @@ FROM base GROUP BY 1`,
  */
 async function newInvestorBuckets(q: QueryFn, f: Filters, bucket: Bucket): Promise<Map<string, number>> {
   const p = new Params();
-  const b = salesBase(f, f.range, p);
+  const b = salesBase(f, f.range, p, false, { includeFirstDeposit: true });
   const rows = await q(
     `WITH ${b.cte}
 SELECT label, COUNT(*)::int AS n FROM (

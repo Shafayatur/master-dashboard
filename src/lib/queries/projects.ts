@@ -45,7 +45,7 @@ type RawScore = Omit<ScorecardRow, 'share'>;
 
 export async function projectRows(q: QueryFn, f: Filters, r: DateRange): Promise<RawScore[]> {
   const p = new Params();
-  const b = salesBase(f, r, p);
+  const b = salesBase(f, r, p, false, { includeFirstDeposit: true });
   const rows = await q(
     `WITH ${b.cte}
 SELECT p.id::text AS key, p.name AS label,

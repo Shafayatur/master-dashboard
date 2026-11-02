@@ -16,7 +16,7 @@ export function buildPoolConfig(connectionString: string, o: PoolOptions): PoolC
   applyPgTypeParsers();
   const url = new URL(connectionString);
   url.searchParams.delete('sslmode');
-  const timeout = o.statementTimeoutMs ?? 15_000;
+  const timeout = o.statementTimeoutMs ?? 30_000;
   return {
     connectionString: url.toString(),
     ssl: o.ssl,

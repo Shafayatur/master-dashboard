@@ -147,7 +147,7 @@ SELECT COALESCE(SUM(ltv), 0)::float8 AS total,
   return { investors: num(r?.investors), total, top10Share: pct(num(r?.top10), total), top20PctShare: pct(num(r?.top20), total) };
 }
 
-const FIRST_DEP = `fd AS (
+const FIRST_DEP = `fd AS MATERIALIZED (
   SELECT o."userId", MIN(d."date") AS first_dep
   FROM deposits d JOIN "order" o ON o.id = d."orderId" AND o."deletedAt" IS NULL
   WHERE d."deletedAt" IS NULL AND d.status::text = 'approved' GROUP BY o."userId"
@@ -159,15 +159,24 @@ export async function cohorts(q: QueryFn, today: string): Promise<CohortRow[]> {
   const { start, end } = utcBounds({ from: first, to: today });
   const p = new Params();
   const rows = await q(
-    `WITH ${FIRST_DEP}
+    `WITH ${FIRST_DEP},
+u_filtered AS MATERIALIZED (
+  SELECT u.id, u."createdAt" FROM "user" u
+  WHERE ${INVESTOR} AND u."createdAt" >= ${p.add(start)}::timestamp AND u."createdAt" < ${p.add(end)}::timestamp
+),
+joined AS MATERIALIZED (
+  SELECT u_filtered.id, u_filtered."createdAt", fd.first_dep, fd."userId" AS fd_user_id
+  FROM u_filtered
+  FULL OUTER JOIN fd ON fd."userId" = u_filtered.id
+)
 SELECT to_char(date_trunc('month', u."createdAt" + interval '6 hours'), 'YYYY-MM-DD') AS month,
   COUNT(*)::int AS registered,
-  COUNT(*) FILTER (WHERE fd.first_dep < u."createdAt" + interval '7 days')::int AS d7,
-  COUNT(*) FILTER (WHERE fd.first_dep < u."createdAt" + interval '30 days')::int AS d30,
-  COUNT(*) FILTER (WHERE fd.first_dep < u."createdAt" + interval '90 days')::int AS d90,
-  COUNT(fd."userId")::int AS ever
-FROM "user" u LEFT JOIN fd ON fd."userId" = u.id
-WHERE ${INVESTOR} AND u."createdAt" >= ${p.add(start)}::timestamp AND u."createdAt" < ${p.add(end)}::timestamp
+  COUNT(*) FILTER (WHERE u.first_dep < u."createdAt" + interval '7 days')::int AS d7,
+  COUNT(*) FILTER (WHERE u.first_dep < u."createdAt" + interval '30 days')::int AS d30,
+  COUNT(*) FILTER (WHERE u.first_dep < u."createdAt" + interval '90 days')::int AS d90,
+  COUNT(u.fd_user_id)::int AS ever
+FROM joined u
+WHERE id IS NOT NULL
 GROUP BY 1`,
     p.values,
   );
