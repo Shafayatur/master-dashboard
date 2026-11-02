@@ -2,7 +2,7 @@ import 'server-only';
 import { addDays, addMonths, startOfMonth, type DateRange } from '@/lib/filters/dates';
 import { parseFilters } from '@/lib/filters/schema';
 import { dhakaTs } from '@/lib/time';
-import { attention, salesKpis } from './overview';
+import { attention } from './overview';
 import { Params, investorJoin, pgTs, salesBase, utcBounds, type QueryFn } from './sql-filters';
 
 export const REINVEST_WINDOW_DAYS = 30;
@@ -211,27 +211,34 @@ async function reinvestment(q: QueryFn, range: DateRange, today: string) {
   const b = salesBase(neutral, range, p, true);
   const w = p.add(REINVEST_WINDOW_DAYS);
   const [row] = await q(
-    `WITH ${b.cte}, x AS (
-  SELECT bs.amount, bs."userId", d."paymentMethod"::text AS method,
-    EXISTS (SELECT 1 FROM returns r JOIN "order" ro ON ro.id = r."orderId" AND ro."deletedAt" IS NULL
-      WHERE ro."userId" = bs."userId" AND r."deletedAt" IS NULL AND r.status::text = 'completed'
-        AND r."date" <= bs.dep_date AND r."date" > bs.dep_date - (${w}::int * interval '1 day')) AS linked
+    `WITH ${b.cte}, paid_ret AS (
+  SELECT ro."userId", r."date" AS payout_date
+  FROM returns r JOIN "order" ro ON ro.id = r."orderId" AND ro."deletedAt" IS NULL ${investorJoin('ro."userId"')}
+  WHERE r."deletedAt" IS NULL AND r.status::text = 'completed'
+    AND r."date" >= ${b.s} - (${w}::int * interval '1 day') AND r."date" < ${b.e}
+  GROUP BY ro."userId", r."date"
+), x AS (
+  SELECT bs.dep_id, bs.amount, bs."userId", bs.first_dep, d."paymentMethod"::text AS method,
+    COALESCE(BOOL_OR(pr.payout_date IS NOT NULL), FALSE) AS linked
   FROM base bs JOIN deposits d ON d.id = bs.dep_id
+  LEFT JOIN paid_ret pr ON pr."userId" = bs."userId"
+    AND pr.payout_date <= bs.dep_date AND pr.payout_date > bs.dep_date - (${w}::int * interval '1 day')
+  GROUP BY bs.dep_id, bs.amount, bs."userId", bs.first_dep, d."paymentMethod"
 )
 SELECT COUNT(*)::int AS all_n, COALESCE(SUM(amount), 0)::float8 AS all_amt, COUNT(DISTINCT "userId")::int AS all_inv,
   COUNT(*) FILTER (WHERE method = 'reinvest')::int AS c_n, COALESCE(SUM(amount) FILTER (WHERE method = 'reinvest'), 0)::float8 AS c_amt,
   COUNT(DISTINCT "userId") FILTER (WHERE method = 'reinvest')::int AS c_inv,
   COUNT(*) FILTER (WHERE method <> 'reinvest' AND linked)::int AS e_n, COALESCE(SUM(amount) FILTER (WHERE method <> 'reinvest' AND linked), 0)::float8 AS e_amt,
-  COUNT(DISTINCT "userId") FILTER (WHERE method <> 'reinvest' AND linked)::int AS e_inv
+  COUNT(DISTINCT "userId") FILTER (WHERE method <> 'reinvest' AND linked)::int AS e_inv,
+  COUNT(DISTINCT "userId") FILTER (WHERE first_dep < ${b.s})::int AS returning
 FROM x`,
     p.values,
   );
-  const k = await salesKpis(q, neutral, range);
   return {
     total: { count: num(row?.all_n), amount: num(row?.all_amt), investors: num(row?.all_inv) },
     confirmed: { count: num(row?.c_n), amount: num(row?.c_amt), investors: num(row?.c_inv) },
     estimated: { count: num(row?.e_n), amount: num(row?.e_amt), investors: num(row?.e_inv) },
-    repeat: { investing: k.uniqueInvestors, returning: k.oldInvestors },
+    repeat: { investing: num(row?.all_inv), returning: num(row?.returning) },
   };
 }
 
@@ -240,18 +247,28 @@ async function conversion(q: QueryFn, range: DateRange, today: string) {
   const p = new Params();
   const s = p.add(start);
   const e = p.add(end);
-  const within = (d: number) =>
-    `COUNT(*) FILTER (WHERE EXISTS (SELECT 1 FROM deposits d JOIN "order" o2 ON o2.id = d."orderId" AND o2."deletedAt" IS NULL
-  WHERE o2."userId" = fp."userId" AND d."deletedAt" IS NULL AND d.status::text = 'approved'
-    AND d."date" >= fp.first_payout AND d."date" < fp.first_payout + interval '${d} days'))::int`;
   const [row] = await q(
     `WITH fp AS (
   SELECT o."userId", MIN(r."date") AS first_payout, SUM(r.amount) AS paid
   FROM returns r JOIN "order" o ON o.id = r."orderId" AND o."deletedAt" IS NULL ${investorJoin('o."userId"')}
   WHERE r."deletedAt" IS NULL AND r.status::text = 'completed' AND r."date" >= ${s}::timestamp AND r."date" < ${e}::timestamp GROUP BY o."userId"
+), dep AS (
+  SELECT o2."userId", d."date" AS dep_date
+  FROM deposits d JOIN "order" o2 ON o2.id = d."orderId" AND o2."deletedAt" IS NULL
+  WHERE d."deletedAt" IS NULL AND d.status::text = 'approved'
+    AND d."date" >= ${s}::timestamp AND d."date" < ${e}::timestamp + interval '90 days'
+), fp_with_next_dep AS (
+  SELECT fp."userId", fp.paid, fp.first_payout, MIN(dep.dep_date) AS next_dep
+  FROM fp
+  LEFT JOIN dep ON dep."userId" = fp."userId" AND dep.dep_date >= fp.first_payout
+    AND dep.dep_date < fp.first_payout + interval '90 days'
+  GROUP BY fp."userId", fp.paid, fp.first_payout
 )
 SELECT COUNT(*)::int AS paid_investors, COALESCE(SUM(paid), 0)::float8 AS paid_amount,
-  ${within(30)} AS r30, ${within(60)} AS r60, ${within(90)} AS r90 FROM fp`,
+  COUNT(*) FILTER (WHERE next_dep < first_payout + interval '30 days')::int AS r30,
+  COUNT(*) FILTER (WHERE next_dep < first_payout + interval '60 days')::int AS r60,
+  COUNT(*) FILTER (WHERE next_dep IS NOT NULL)::int AS r90
+FROM fp_with_next_dep`,
     p.values,
   );
   return {
