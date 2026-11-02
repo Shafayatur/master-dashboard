@@ -55,6 +55,7 @@ export function listExport(key: ListKey, d: ActionListsData): ListExport {
       ]);
     case 'overdue':
       return build(key, d.overdue.rows, [
+        { header: 'Order ID', value: (r) => r.orderId, kind: 'int' },
         { header: 'Project', value: (r) => r.project },
         { header: 'Amount', value: (r) => r.amount, kind: 'money' },
         { header: 'Maturity date', value: (r) => r.maturity, kind: 'date' },

@@ -1,3 +1,4 @@
+import ExcelJS from 'exceljs';
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -64,7 +65,14 @@ describe('overdue investments', () => {
     const actions = await loadActionLists(q, NOW, { maturingDays: 14, limit: 50 });
     const output = listExport('overdue', actions);
     expect(output.title).toBe('Overdue: status needs update');
-    expect(output.toCsv()).toContain('One hundred twenty days overdue');
-    expect(output.toCsv()).toContain('90+');
+    const csv = output.toCsv();
+    expect(csv.split('\r\n')[0]).toBe(
+      '\uFEFFName,Phone,Email,Order ID,Project,Amount,Maturity date,Days overdue,Bucket,Lifetime value,Investments',
+    );
+    expect(csv).toContain('One hundred twenty days overdue,,,12,Project,300,2026-06-16,120,90+,0,1');
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(await output.toXlsx() as unknown as ArrayBuffer);
+    expect(workbook.worksheets[0]?.getRow(2).getCell(4).value).toBe(12);
   });
 });
