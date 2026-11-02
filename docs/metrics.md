@@ -22,6 +22,16 @@ exclude soft-deleted rows (`"deletedAt" IS NOT NULL`). Amounts are BDT.
 | Unique / new / old investors | Distinct `order."userId"` on approved deposits. New = first-ever approved deposit falls in the period; old = had one before the period start |
 | Conversion | Share of a registration cohort with an approved deposit within 7 / 30 / 90 days and ever |
 
+## Investment depth
+| Metric | Definition |
+|---|---|
+| Investment | An order with status `invested` or `closed`, with `"deletedAt" IS NULL`, belonging to a live investor user (`user."userType" = 'investor'`, `"deletedAt" IS NULL`). Booked, verifying, and other order statuses do not count. |
+| Investment number | An investor's first qualifying order is investment 1; each additional qualifying order increments the count. |
+| Depth bucket | Investors with at least one investment are grouped into `1`, `2`, `3`, and `4plus` (four or more). Single = exactly 1; multiple = 2 or more. |
+| Bucket share | Bucket investor count / all investors with at least one investment x 100. |
+| Snapshot | Ignores date, product, and other dashboard filters, like the Investor segments card. |
+| Export lifetime value | Sum of approved deposits on non-deleted orders, matching the action-list lifetime-value definition. First and latest investment dates use the order's `investmentDate` in Dhaka time. |
+
 ## Segments (per investor, across all their orders)
 Maturity of an order = last `return_schedules."paymentDate"`, else `investmentDate + productDuration`.
 
