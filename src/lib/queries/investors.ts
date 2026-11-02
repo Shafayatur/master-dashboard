@@ -1,6 +1,7 @@
 import 'server-only';
 import { addDays, addMonths, endOfMonth, startOfMonth } from '@/lib/filters/dates';
 import { Params, pgTs, utcBounds, type QueryFn } from './sql-filters';
+import { investmentDepth, type InvestmentDepth } from './investment-depth';
 import { perInvestorCte, segmentCase } from './segment-sql';
 
 export type SegmentKey = 'active' | 'recently_active' | 'cooling' | 'inactive' | 'prospect';
@@ -57,6 +58,7 @@ export interface InvestorsData {
   concentration: Concentration;
   cohorts: CohortRow[];
   medianDaysToFirst: number | null;
+  investmentDepth: InvestmentDepth;
 }
 
 const num = (v: unknown): number => Number(v ?? 0);
@@ -197,7 +199,14 @@ FROM "user" u JOIN fd ON fd."userId" = u.id WHERE ${INVESTOR} AND fd.first_dep >
 }
 
 export async function loadInvestors(q: QueryFn, today: string, now: Date): Promise<InvestorsData> {
-  const [segs, tr, conc, coh, median] = await Promise.all([segments(q, now), tiers(q), concentration(q), cohorts(q, today), medianDaysToFirst(q)]);
+  const [segs, tr, conc, coh, median, depth] = await Promise.all([
+    segments(q, now),
+    tiers(q),
+    concentration(q),
+    cohorts(q, today),
+    medianDaysToFirst(q),
+    investmentDepth(q),
+  ]);
   return {
     generatedAt: now.toISOString(),
     totalInvestors: segs.reduce((s, x) => s + x.investors, 0),
@@ -206,5 +215,6 @@ export async function loadInvestors(q: QueryFn, today: string, now: Date): Promi
     concentration: conc,
     cohorts: coh,
     medianDaysToFirst: median,
+    investmentDepth: depth,
   };
 }

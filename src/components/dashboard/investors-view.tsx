@@ -105,7 +105,11 @@ export function InvestorsView({ data, extras, unit, search, today }: Props) {
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="space-y-4">
           <div className="grid gap-4 lg:grid-cols-2">
-            <ChartCard title="Investor segments" subtitle="Snapshot as of now. Ignores the date and product filters.">
+            <ChartCard
+              className="lg:col-span-2"
+              title="Investor segments"
+              subtitle="Snapshot as of now. Ignores the date and product filters."
+            >
               <div className="flex flex-wrap items-center justify-center gap-4 sm:justify-start">
                 <DonutChart
                   slices={segments}
@@ -125,6 +129,65 @@ export function InvestorsView({ data, extras, unit, search, today }: Props) {
             <ChartCard title="Investors by lifetime value" subtitle={paretoNote}>
               <BarChart items={tierItems} unit={unit} kind="int" height={250} />
             </ChartCard>
+
+            <section className={card}>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-medium">Investment depth</h3>
+                  <p className="mt-1 text-xs text-muted">
+                    Snapshot of all investors with at least one investment; ignores date, product, and other dashboard filters.
+                  </p>
+                </div>
+                <div className="flex shrink-0 gap-2 print:hidden">
+                  <a
+                    href="/api/export/investment-depth?bucket=all&fmt=csv"
+                    download
+                    className="rounded-md border border-line px-2 py-1 text-xs hover:text-fg"
+                  >
+                    Export all CSV
+                  </a>
+                  <a
+                    href="/api/export/investment-depth?bucket=all&fmt=xlsx"
+                    download
+                    className="rounded-md border border-line px-2 py-1 text-xs hover:text-fg"
+                  >
+                    Export all Excel
+                  </a>
+                </div>
+              </div>
+              <div className="mt-3 divide-y divide-line">
+                {data.investmentDepth.buckets.map((bucket) => (
+                  <div key={bucket.key} className="flex items-center justify-between gap-3 py-2">
+                    <div className="min-w-0">
+                      <p className="text-sm">{bucket.label}</p>
+                      <p className="text-xs text-muted">
+                        {formatInt(bucket.investors)} investors · {bucket.share.toFixed(1)}%
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 gap-2 print:hidden">
+                      <a
+                        href={`/api/export/investment-depth?bucket=${bucket.key}&fmt=csv`}
+                        download
+                        className="rounded-md border border-line px-2 py-1 text-xs hover:text-fg"
+                      >
+                        CSV
+                      </a>
+                      <a
+                        href={`/api/export/investment-depth?bucket=${bucket.key}&fmt=xlsx`}
+                        download
+                        className="rounded-md border border-line px-2 py-1 text-xs hover:text-fg"
+                      >
+                        Excel
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-3 text-xs text-muted">
+                {formatInt(data.investmentDepth.singleInvestors)} investors invested once,{' '}
+                {formatInt(data.investmentDepth.multipleInvestors)} invested more than once
+              </p>
+            </section>
           </div>
 
           <ChartCard title="New registrations" subtitle={registrationNote}>
