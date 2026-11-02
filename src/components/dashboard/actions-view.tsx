@@ -111,9 +111,10 @@ export function ActionsView({ data, unit }: { data: ActionListsData; unit: Money
           shown={data.overdue.rows.length}
           exportHref="/api/export/actions?list=overdue"
           excelHref="/api/export/actions?list=overdue&fmt=xlsx"
-          headers={['Investor', 'Project', 'Amount', 'Matured on', 'Days overdue', 'Bucket', 'Lifetime value', 'Investments']}
+          headers={['Investor', 'Order ID', 'Project', 'Amount', 'Matured on', 'Days overdue', 'Bucket', 'Lifetime value', 'Investments']}
           rows={data.overdue.rows.map((row) => [
             <InvestorCell key={`investor-${row.orderId}`} investor={row} />,
+            formatInt(row.orderId),
             row.project,
             formatMoney(row.amount, unit),
             row.maturity,
