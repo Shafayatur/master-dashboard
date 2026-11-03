@@ -149,3 +149,25 @@ describe('exportExplorer', () => {
     expect(e.columns[0]).toEqual({ key: 'id', label: 'Deposit', kind: 'int' });
   });
 });
+
+it('filters Explorer rows by new and returning investors', async () => {
+  await db.exec(`
+    INSERT INTO "user" (id, name, phone, email, "createdAt", "userType") VALUES
+      (20,'Prospect','01711000020','p@example.com','2026-10-04','investor'),
+      (21,'Returning Investor','01711000021','r@example.com','2026-01-05','investor');
+    INSERT INTO "order" (id, status, quantity, "totalAmount", "investmentDate", "createdAt", "userId", "productId")
+      VALUES (21,'invested',1,1000,'2026-01-06','2026-01-06',21,1);
+    INSERT INTO deposits (id, "date", amount, "paymentMethod", status, "orderId") VALUES
+      (20,'2026-01-06',500,'cash','approved',21), (21,'2026-10-05',500,'cash','approved',21);
+  `);
+
+  const newInvestors = await loadExplorer(q, params('t=investors&ik=new'));
+  expect(newInvestors.rows.map((row) => row.id)).toEqual([2, 1]);
+  expect(newInvestors.rows.map((row) => row.id)).not.toContain(20);
+
+  const returningInvestors = await loadExplorer(q, params('t=investors&ik=old'));
+  expect(returningInvestors.rows.map((row) => row.id)).toEqual([21]);
+
+  expect((await loadExplorer(q, params('t=deposits&ik=new'))).rows.map((row) => row.id)).toEqual([3, 2, 1]);
+  expect((await loadExplorer(q, params('t=deposits&ik=old'))).rows.map((row) => row.id)).toEqual([21]);
+});

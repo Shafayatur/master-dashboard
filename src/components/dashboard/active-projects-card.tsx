@@ -123,7 +123,7 @@ export function ActiveProjectsCard({ projects, unit, searchParams }: Props) {
                       </div>
                     </td>
                     <td className="px-3 py-3 tabular-nums">
-                      {formatInt(project.runningOrders)} - {formatMoney(project.runningAmount, unit)}
+                      {formatMoney(project.runningAmount, unit)}
                     </td>
                     <td className="px-3 py-3 text-right tabular-nums">{formatInt(project.runningInvestors)}</td>
                     <td className="px-3 py-3 text-muted">{project.nextMaturity ?? '—'}</td>

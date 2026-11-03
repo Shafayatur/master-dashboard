@@ -67,6 +67,22 @@ describe('loadMoneyFlow', () => {
     expect(d.schedule.coverage).toEqual({ invested: 4, withSchedule: 1 }); // staff order excluded
   });
 
+  it('running portfolio excludes overdue invested orders and totals future schedule liability', async () => {
+    const d = await loadMoneyFlow(q, SEPT, TODAY, NOW);
+    expect(d.running).toEqual({
+      orders: 3,
+      investors: 2,
+      amount: 42000,
+      withSchedule: 1,
+      scheduledPayouts: {
+        installments: 2,
+        total: 11000,
+        principal: 10000,
+        profit: 1000,
+      },
+    });
+  });
+
   it('maturity calendar: principal per week, plus past-maturity orders still marked invested', async () => {
     const d = await loadMoneyFlow(q, SEPT, TODAY, NOW);
     expect(d.maturity.overdue).toEqual({ count: 1, amount: 8000 });

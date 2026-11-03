@@ -9,7 +9,7 @@ import type { Row } from './sql-filters';
 export function getMoneyFlow(filters: Filters, today: string): Promise<MoneyFlowData> {
   return unstable_cache(
     () => loadMoneyFlow((sql, params) => querySource<Row>(sql, params), filters.range, today, new Date()),
-    ['money-flow', today, filters.range.from, filters.range.to],
+    ['money-flow-v2', today, filters.range.from, filters.range.to],
     { revalidate: 60 },
   )();
 }

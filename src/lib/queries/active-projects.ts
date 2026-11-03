@@ -37,7 +37,7 @@ SELECT p.id, p.name, split_part(p."productDuration"::text,' ',1)::int AS tenure,
   COALESCE(p."isActive",FALSE) AS is_active, COALESCE(run.running_orders,0) AS running_orders, COALESCE(run.running_amount,0) AS running_amount,
   COALESCE(run.running_investors,0) AS running_investors, run.next_maturity
 FROM products p LEFT JOIN run ON run."productId" = p.id LEFT JOIN sold ON sold."productId" = p.id
-WHERE p."deletedAt" IS NULL AND (COALESCE(p."isActive",FALSE) OR COALESCE(run.running_orders,0) > 0)
+WHERE p."deletedAt" IS NULL AND p."isActive" = TRUE
 ORDER BY (COALESCE(p."isActive",FALSE) AND COALESCE(p.stock,0) > 0) DESC, COALESCE(run.running_amount,0) DESC, p.name LIMIT 100`,
   );
   return rows.map((row) => {

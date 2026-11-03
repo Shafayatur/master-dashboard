@@ -67,6 +67,7 @@ export interface SalesBase {
 
 export interface SalesBaseOptions {
   materializeFirstDeposit?: boolean;
+  includeFirstDeposit?: boolean;
   /** Omit for caller-managed FULL JOINs, avoiding misestimated nested-loop CTE rescans. */
   joinFirstDeposit?: boolean;
 }
@@ -81,26 +82,50 @@ export function salesBase(f: Filters, r: DateRange, p: Params, plain = false, op
   const s = `${p.add(start)}::timestamp`;
   const e = `${p.add(end)}::timestamp`;
   const joinFirstDeposit = options.joinFirstDeposit ?? true;
-  const preds = [`d."deletedAt" IS NULL`, `d."date" >= ${s}`, `d."date" < ${e}`];
+  const needsFirstDep = Boolean(
+    options.includeFirstDeposit || options.materializeFirstDeposit || (!plain && f.investorKind !== 'all'),
+  );
+  const basePreds = [`d."deletedAt" IS NULL`, `d."date" >= ${s}`, `d."date" < ${e}`];
   if (plain) {
-    preds.push(`d.status::text = 'approved'`);
+    basePreds.push(`d.status::text = 'approved'`);
   } else {
-    preds.push(`d.status::text = ANY(${p.add(f.depositStatus)}::text[])`);
-    if (f.paymentMethod.length) preds.push(`d."paymentMethod"::text = ANY(${p.add(f.paymentMethod)}::text[])`);
-    if (f.excludeReinvest) preds.push(`d."paymentMethod"::text <> 'reinvest'`);
-    preds.push(...productPredicates(f, p));
-    if (joinFirstDeposit && f.investorKind === 'new') preds.push(`fd.first_dep >= ${s} AND fd.first_dep < ${e}`);
-    if (joinFirstDeposit && f.investorKind === 'old') preds.push(`fd.first_dep < ${s}`);
+    basePreds.push(`d.status::text = ANY(${p.add(f.depositStatus)}::text[])`);
+    if (f.paymentMethod.length) basePreds.push(`d."paymentMethod"::text = ANY(${p.add(f.paymentMethod)}::text[])`);
+    if (f.excludeReinvest) basePreds.push(`d."paymentMethod"::text <> 'reinvest'`);
+    basePreds.push(...productPredicates(f, p));
   }
-  const cte = `${FIRST_DEPOSIT(options.materializeFirstDeposit || (!plain && f.investorKind !== 'all'))},
-base AS (
-  SELECT d.id AS dep_id, d.amount, d."paymentMethod"::text AS payment_method, d."orderId", d."date" AS dep_date, o."userId"${joinFirstDeposit ? ', fd.first_dep' : ''}
+
+  const rawBase = `SELECT d.id AS dep_id, d.amount, d."paymentMethod"::text AS payment_method, d."orderId", d."date" AS dep_date, o."userId"
   FROM deposits d
   JOIN "order" o ON o.id = d."orderId" AND o."deletedAt" IS NULL
   JOIN products p ON p.id = o."productId"
   ${investorJoin('o."userId"')}
-  ${joinFirstDeposit ? 'LEFT JOIN first_dep fd ON fd."userId" = o."userId"' : ''}
-  WHERE ${preds.join('\n    AND ')}
+  WHERE ${basePreds.join('\n    AND ')}`;
+
+  let cte: string;
+  if (!joinFirstDeposit) {
+    cte = `${FIRST_DEPOSIT(true)},
+base AS (${rawBase})`;
+  } else if (!needsFirstDep) {
+    cte = `base AS (${rawBase})`;
+  } else {
+    const investorKindPred = !plain && f.investorKind === 'new'
+      ? `first_dep >= ${s} AND first_dep < ${e}`
+      : !plain && f.investorKind === 'old'
+        ? `first_dep < ${s}`
+        : '';
+    cte = `${FIRST_DEPOSIT(true)},
+raw_base AS MATERIALIZED (${rawBase}),
+joined_base AS MATERIALIZED (
+  SELECT rb.dep_id, rb.amount, rb.payment_method, rb."orderId", rb.dep_date, rb."userId", fd.first_dep
+  FROM raw_base rb
+  FULL OUTER JOIN first_dep fd ON fd."userId" = rb."userId"
+),
+base AS (
+  SELECT dep_id, amount, payment_method, "orderId", dep_date, "userId", first_dep
+  FROM joined_base
+  WHERE dep_id IS NOT NULL${investorKindPred ? ` AND ${investorKindPred}` : ''}
 )`;
+  }
   return { cte, s, e };
 }

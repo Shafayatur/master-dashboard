@@ -38,18 +38,19 @@ beforeAll(async () => {
 });
 
 describe('loadActionLists', () => {
-  it('maturing: running investments due within the window, plus recently overdue ones, soonest first', async () => {
+  it('maturing: only upcoming running investments within the selected window', async () => {
     const d = await loadActionLists(q, NOW, { maturingDays: 14, limit: 50 });
-    expect(d.maturing.rows.map((r) => [r.orderId, r.maturity, r.daysLeft])).toEqual([[2, '2026-10-01', -13], [1, '2026-10-20', 6]]);
-    expect(d.maturing.total).toBe(2);
-    expect(d.maturing.amount).toBe(23000);
-    expect(d.maturing.rows[1]).toMatchObject({ name: 'User One', phone: '01711000001', project: 'Dairy A', amount: 15000, investments: 1 });
+    expect(d.maturing.rows.map((r) => [r.orderId, r.maturity, r.daysLeft])).toEqual([[1, '2026-10-20', 6]]);
+    expect(d.maturing.total).toBe(1);
+    expect(d.maturing.amount).toBe(15000);
+    expect(d.maturing.rows[0]).toMatchObject({ name: 'User One', phone: '01711000001', project: 'Dairy A', amount: 15000, investments: 1 });
+    expect(d.overdue.rows.map(({ orderId, daysOverdue, bucket }) => [orderId, daysOverdue, bucket])).toContainEqual([2, 13, '1-30']);
   });
-  it('maturing window is adjustable', async () => {
+  it('maturing window is adjustable and does not include past maturities', async () => {
     const d = await loadActionLists(q, NOW, { maturingDays: 7, limit: 50 });
-    expect(d.maturing.rows.map((r) => r.orderId)).toEqual([2, 1]);
+    expect(d.maturing.rows.map((r) => r.orderId)).toEqual([1]);
     const none = await loadActionLists(q, NOW, { maturingDays: 3, limit: 50 });
-    expect(none.maturing.rows.map((r) => r.orderId)).toEqual([2]);
+    expect(none.maturing.rows).toEqual([]);
   });
   it('cooling: last project matured 30-60 days ago, nothing running, richest first', async () => {
     const d = await loadActionLists(q, NOW, { maturingDays: 14, limit: 50 });
@@ -68,7 +69,7 @@ describe('loadActionLists', () => {
     expect(d.pending.total).toBe(1);
   });
   it('keeps the true total when the row limit cuts the list', async () => {
-    const d = await loadActionLists(q, NOW, { maturingDays: 14, limit: 1 });
+    const d = await loadActionLists(q, NOW, { maturingDays: 60, limit: 1 });
     expect(d.maturing.rows).toHaveLength(1);
     expect(d.maturing.total).toBe(2);
     expect(JSON.parse(JSON.stringify(d))).toEqual(d);

@@ -42,6 +42,19 @@ describe('source env', () => {
     });
     const { getSourceEnv } = await import('./env');
     expect(parse(getSourceEnv().url).port).toBe('5432');
+    expect(getSourceEnv().poolMax).toBe(6);
+  });
+  it('accepts a source pool size up to 20', async () => {
+    Object.assign(process.env, {
+      SOURCE_DB_HOST: 'h', SOURCE_DB_USER: 'u', SOURCE_DB_PASSWORD: 'p', SOURCE_DB_NAME: 'd',
+      SOURCE_DB_POOL_MAX: '20',
+    });
+    const { getSourceEnv } = await import('./env');
+    expect(getSourceEnv().poolMax).toBe(20);
+    process.env.SOURCE_DB_POOL_MAX = '21';
+    vi.resetModules();
+    const { getSourceEnv: getInvalidSourceEnv } = await import('./env');
+    expect(() => getInvalidSourceEnv()).toThrow(/SOURCE_DB_POOL_MAX/);
   });
   it('accepts a full URL', async () => {
     process.env.SOURCE_DATABASE_URL = 'postgres://u:p@h:5432/d';
@@ -66,5 +79,13 @@ describe('config env is independent of the source env', () => {
     process.env.CONFIG_DATABASE_URL = 'postgres://u:p@ep-x-pooler.region.aws.neon.tech/neondb?sslmode=require';
     const { getConfigDbUrl } = await import('./env');
     expect(getConfigDbUrl()).toContain('neon.tech');
+  });
+
+  describe('pool config', () => {
+    it('defaults the statement timeout to 30 seconds', () => {
+      const config = buildPoolConfig('postgres://u:p@h:5432/d', { ssl: false, max: 1, appName: 't' });
+      expect(config.statement_timeout).toBe(30_000);
+      expect(config.query_timeout).toBe(32_000);
+    });
   });
 });

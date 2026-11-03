@@ -25,7 +25,7 @@ export interface MaturingRow extends Contact {
 }
 export interface OverdueRow extends Omit<MaturingRow, 'daysLeft'> {
   daysOverdue: number;
-  bucket: '31-90' | '90+';
+  bucket: '1-30' | '31-90' | '90+';
 }
 export interface CoolingRow extends Contact {
   lastProject: string;
@@ -108,9 +108,9 @@ SELECT ord.order_id, ${WHO}, ord.project, ord.amount::float8 AS amount,
 FROM ord JOIN "user" u ON u.id = ord."userId" AND ${INVESTOR}
 LEFT JOIN ltv l ON l."userId" = ord."userId" LEFT JOIN cnt c ON c."userId" = ord."userId"
 WHERE ord.status = 'invested'
-  AND ord.maturity >= $1::timestamp - ($2::int * interval '1 day') AND ord.maturity < $1::timestamp + ($3::int * interval '1 day')
-ORDER BY ord.maturity ASC LIMIT $4::int`,
-    [now, OVERDUE_DAYS, days, limit],
+  AND ord.maturity >= $1::timestamp AND ord.maturity < $1::timestamp + ($2::int * interval '1 day')
+ORDER BY ord.maturity ASC LIMIT $3::int`,
+    [now, days, limit],
   );
   return result(rows, (r): MaturingRow => ({
     ...contact(r), orderId: num(r.order_id), project: str(r.project), amount: num(r.amount), maturity: str(r.maturity),
@@ -124,12 +124,16 @@ async function overdue(q: QueryFn, now: string, limit: number) {
 SELECT ord.order_id, ${WHO}, ord.project, ord.amount::float8 AS amount,
   to_char(ord.maturity + interval '6 hours', 'YYYY-MM-DD') AS maturity,
   CEIL(EXTRACT(EPOCH FROM ($1::timestamp - ord.maturity)) / 86400)::int AS days_overdue,
-  CASE WHEN CEIL(EXTRACT(EPOCH FROM ($1::timestamp - ord.maturity)) / 86400)::int > $3::int THEN '90+' ELSE '31-90' END AS bucket,
+  CASE
+    WHEN CEIL(EXTRACT(EPOCH FROM ($1::timestamp - ord.maturity)) / 86400)::int > $3::int THEN '90+'
+    WHEN CEIL(EXTRACT(EPOCH FROM ($1::timestamp - ord.maturity)) / 86400)::int > $2::int THEN '31-90'
+    ELSE '1-30'
+  END AS bucket,
   COALESCE(l.ltv, 0)::float8 AS ltv, COALESCE(c.n, 0)::int AS investments,
   COUNT(*) OVER ()::int AS total, SUM(ord.amount) OVER ()::float8 AS total_amount
 FROM ord JOIN "user" u ON u.id = ord."userId" AND ${INVESTOR}
 LEFT JOIN ltv l ON l."userId" = ord."userId" LEFT JOIN cnt c ON c."userId" = ord."userId"
-WHERE ord.status = 'invested' AND ord.maturity < $1::timestamp - ($2::int * interval '1 day')
+WHERE ord.status = 'invested' AND ord.maturity < $1::timestamp
 ORDER BY days_overdue DESC, ord.order_id DESC LIMIT $4::int`,
     [now, OVERDUE_DAYS, 90, limit],
   );
