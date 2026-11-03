@@ -110,9 +110,9 @@ base AS (${rawBase})`;
     cte = `base AS (${rawBase})`;
   } else {
     const investorKindPred = !plain && f.investorKind === 'new'
-      ? `fd.first_dep >= ${s} AND fd.first_dep < ${e}`
+      ? `first_dep >= ${s} AND first_dep < ${e}`
       : !plain && f.investorKind === 'old'
-        ? `fd.first_dep < ${s}`
+        ? `first_dep < ${s}`
         : '';
     cte = `${FIRST_DEPOSIT(true)},
 raw_base AS MATERIALIZED (${rawBase}),
