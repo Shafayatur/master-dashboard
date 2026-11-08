@@ -16,10 +16,11 @@ async function Loaded({ id, unit }: { id: number; unit: MoneyUnit }) {
   return <InvestorProfileView p={profile} unit={unit} />;
 }
 
-export default async function InvestorPage({ params }: { params: { id: string } }) {
+export default async function InvestorPage(props: { params: Promise<{ id: string }> }) {
+  const params = await props.params;
   await requireSession();
   if (!/^\d{1,9}$/.test(params.id)) notFound();
-  const unit = parseMoneyUnit(cookies().get(MONEY_UNIT_COOKIE)?.value);
+  const unit = parseMoneyUnit((await cookies()).get(MONEY_UNIT_COOKIE)?.value);
 
   return (
     <Suspense key={`${params.id}|${unit}`} fallback={<CommandCenterSkeleton />}>

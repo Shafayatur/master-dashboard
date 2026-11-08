@@ -53,7 +53,10 @@ async function Loaded({
   );
 }
 
-export default async function SalesPage({ searchParams }: { searchParams: Record<string, string | string[] | undefined> }) {
+export default async function SalesPage(
+  props: { searchParams: Promise<Record<string, string | string[] | undefined>> }
+) {
+  const searchParams = await props.searchParams;
   await requireSession();
   const today = todayDhaka();
   const filters = parseFilters(searchParams, today);
@@ -62,7 +65,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Record
   const bookingView = parseBookingView(rawView);
   const bookingAnchor = resolveBookingAnchor(rawAnchor, filters.range, today);
   const search = queryString(searchParams);
-  const unit = parseMoneyUnit(cookies().get(MONEY_UNIT_COOKIE)?.value);
+  const unit = parseMoneyUnit((await cookies()).get(MONEY_UNIT_COOKIE)?.value);
   return (
     <Suspense
       key={`${serializeFilters(filters).toString()}|${bookingView}|${bookingAnchor}|${unit}`}

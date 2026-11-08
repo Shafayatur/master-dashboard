@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth/session';
 
 /** Gate for every page and API route except the login screen, auth endpoints and the token-protected health check. */
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const { pathname, search } = req.nextUrl;
   const sessionSecret = process.env.SESSION_SECRET ?? '';
   const passkeyHash = process.env.AUTH_PASSKEY_HASH ?? '';

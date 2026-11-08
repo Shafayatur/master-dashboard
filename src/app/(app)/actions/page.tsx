@@ -15,13 +15,14 @@ async function Loaded({ unit, days }: { unit: MoneyUnit; days: number }) {
   return <ActionsView data={data} unit={unit} />;
 }
 
-export default async function ActionsPage({
-  searchParams,
-}: {
-  searchParams: Record<string, string | string[] | undefined>;
-}) {
+export default async function ActionsPage(
+  props: {
+    searchParams: Promise<Record<string, string | string[] | undefined>>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireSession();
-  const unit = parseMoneyUnit(cookies().get(MONEY_UNIT_COOKIE)?.value);
+  const unit = parseMoneyUnit((await cookies()).get(MONEY_UNIT_COOKIE)?.value);
   const requestedDays = searchParams.days;
   const days = typeof requestedDays === 'string'
     ? MATURING_WINDOWS.find((window) => String(window) === requestedDays) ?? 14

@@ -16,15 +16,16 @@ async function Loaded({ filters, today, unit }: { filters: Filters; today: strin
   return <MoneyFlowView data={data} filters={filters} unit={unit} />;
 }
 
-export default async function MoneyFlowPage({
-  searchParams,
-}: {
-  searchParams: Record<string, string | string[] | undefined>;
-}) {
+export default async function MoneyFlowPage(
+  props: {
+    searchParams: Promise<Record<string, string | string[] | undefined>>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireSession();
   const today = todayDhaka();
   const filters = parseFilters(searchParams, today);
-  const unit = parseMoneyUnit(cookies().get(MONEY_UNIT_COOKIE)?.value);
+  const unit = parseMoneyUnit((await cookies()).get(MONEY_UNIT_COOKIE)?.value);
 
   return (
     <Suspense key={`${serializeFilters(filters).toString()}|${unit}`} fallback={<CommandCenterSkeleton />}>

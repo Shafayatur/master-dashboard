@@ -4,7 +4,8 @@ import { LoginForm } from './login-form';
 
 export const metadata: Metadata = { title: 'Sign in' };
 
-export default function LoginPage({ searchParams }: { searchParams: { next?: string } }) {
+export default async function LoginPage(props: { searchParams: Promise<{ next?: string }> }) {
+  const searchParams = await props.searchParams;
   const next = safeNextPath(searchParams.next);
   return (
     <main className="grid min-h-screen lg:grid-cols-[1.1fr_1fr]">

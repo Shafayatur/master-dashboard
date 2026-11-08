@@ -22,11 +22,12 @@ async function Loaded({
   return <ExplorerView data={data} params={params} searchParams={searchParams} />;
 }
 
-export default async function Page({
-  searchParams,
-}: {
-  searchParams: Record<string, string | string[] | undefined>;
-}) {
+export default async function Page(
+  props: {
+    searchParams: Promise<Record<string, string | string[] | undefined>>;
+  }
+) {
+  const searchParams = await props.searchParams;
   await requireSession();
   const now = new Date();
   const today = todayDhaka(now);

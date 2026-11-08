@@ -19,11 +19,12 @@ async function Loaded({ filters, today, unit, searchParams }: { filters: Filters
   return <ProjectsView data={data} activeProjects={activeProjects} filters={filters} unit={unit} searchParams={searchParams} />;
 }
 
-export default async function ProjectsPage({ searchParams }: { searchParams: SearchParams }) {
+export default async function ProjectsPage(props: { searchParams: Promise<SearchParams> }) {
+  const searchParams = await props.searchParams;
   await requireSession();
   const today = todayDhaka();
   const filters = parseFilters(searchParams, today);
-  const unit = parseMoneyUnit(cookies().get(MONEY_UNIT_COOKIE)?.value);
+  const unit = parseMoneyUnit((await cookies()).get(MONEY_UNIT_COOKIE)?.value);
   return (
     <Suspense key={`${serializeFilters(filters).toString()}|${unit}`} fallback={<CommandCenterSkeleton />}>
       <Loaded filters={filters} today={today} unit={unit} searchParams={searchParams} />

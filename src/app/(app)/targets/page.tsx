@@ -17,7 +17,7 @@ async function Loaded({ unit }: { unit: MoneyUnit }) {
 
 export default async function TargetsPage() {
   await requireSession();
-  const unit = parseMoneyUnit(cookies().get(MONEY_UNIT_COOKIE)?.value);
+  const unit = parseMoneyUnit((await cookies()).get(MONEY_UNIT_COOKIE)?.value);
   return (
     <Suspense key={unit} fallback={<CommandCenterSkeleton />}>
       <Loaded unit={unit} />

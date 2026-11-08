@@ -12,7 +12,7 @@ import { SESSION_COOKIE, verifySessionToken } from './session';
 export async function hasValidSession(): Promise<boolean> {
   // cookies() must stay OUTSIDE the try/catch: during a build it throws Next's "this route is dynamic" signal,
   // and swallowing it would let Next prerender the logged-out redirect as a static page for everyone.
-  const token = cookies().get(SESSION_COOKIE)?.value;
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
   try {
     return await verifySessionToken(token, getAuthEnv());
   } catch {

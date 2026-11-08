@@ -1,6 +1,6 @@
 'use server';
 
-import { revalidatePath, revalidateTag } from 'next/cache';
+import { revalidatePath, updateTag } from 'next/cache';
 import { requireSession } from '@/lib/auth/require-session';
 import { queryConfig } from '@/lib/db/config';
 import { TARGETS_CACHE_TAG } from '@/lib/targets/cache';
@@ -24,7 +24,7 @@ export async function saveTarget(_prev: TargetFormState, formData: FormData): Pr
     console.error('[targets] save failed:', (e as Error).message);
     return FAILED;
   }
-  revalidateTag(TARGETS_CACHE_TAG);
+  updateTag(TARGETS_CACHE_TAG);
   revalidatePath('/targets');
   revalidatePath('/');
   return { ok: true, message: `Saved the target for ${parsed.value.month.slice(0, 7)}.` };
@@ -40,7 +40,7 @@ export async function removeTarget(_prev: TargetFormState, formData: FormData): 
     console.error('[targets] delete failed:', (e as Error).message);
     return FAILED;
   }
-  revalidateTag(TARGETS_CACHE_TAG);
+  updateTag(TARGETS_CACHE_TAG);
   revalidatePath('/targets');
   revalidatePath('/');
   return { ok: true, message: `Removed the target for ${month.slice(0, 7)}.` };

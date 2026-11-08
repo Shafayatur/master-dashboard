@@ -11,8 +11,8 @@ export const dynamic = 'force-dynamic';
 
 const body = z.object({ passkey: z.string().min(1).max(256) });
 
-function clientIp(): string {
-  const h = headers();
+async function clientIp(): Promise<string> {
+  const h = await headers();
   return (h.get('x-forwarded-for')?.split(',')[0] ?? h.get('x-real-ip') ?? 'unknown').trim();
 }
 
@@ -28,7 +28,7 @@ export async function POST(req: Request) {
   const parsed = body.safeParse(await req.json().catch(() => null));
   if (!parsed.success) return Response.json({ error: 'Enter the passkey' }, { status: 400 });
 
-  const ipHash = hashIp(clientIp(), env.sessionSecret);
+  const ipHash = hashIp(await clientIp(), env.sessionSecret);
   try {
     // Fail closed: if the attempt store is unavailable nobody can sign in.
     const lock = await getLockState(queryConfig, ipHash);
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
     return Response.json({ error: 'Sign-in is temporarily unavailable' }, { status: 503 });
   }
 
-  cookies().set(SESSION_COOKIE, await createSessionToken(env), {
+  (await cookies()).set(SESSION_COOKIE, await createSessionToken(env), {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
