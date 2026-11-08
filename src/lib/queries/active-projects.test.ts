@@ -41,7 +41,7 @@ describe('loadActiveProjects', () => {
   it('includes open, fully funded, and running projects with snapshot metrics', async () => {
     const projects = await loadActiveProjects(q);
     expect(projects.map((project) => [project.projectId, project.status])).toEqual([
-      [1, 'open'], [3, 'running'], [2, 'fully_funded'],
+      [1, 'open'], [2, 'fully_funded'],
     ]);
     expect(projects[0]).toMatchObject({
       name: 'Open project',
@@ -57,15 +57,6 @@ describe('loadActiveProjects', () => {
       runningInvestors: 2,
       nextMaturity: '2026-09-10',
     });
-    expect(projects.find((project) => project.projectId === 3)).toMatchObject({
-      unitsLeft: 3,
-      unitsSold: 1,
-      fundedPct: 25,
-      runningOrders: 1,
-      runningAmount: 1200,
-      runningInvestors: 1,
-      nextMaturity: '2026-07-01',
-    });
     expect(projects.find((project) => project.projectId === 2)).toMatchObject({
       unitsSold: 2,
       fundedPct: 100,
@@ -76,8 +67,9 @@ describe('loadActiveProjects', () => {
     });
   });
 
-  it('excludes inactive projects without running orders, deleted projects, and staff orders', async () => {
+  it('excludes inactive projects even with running orders, deleted projects, and staff orders', async () => {
     const projects = await loadActiveProjects(q);
+    expect(projects.some((project) => project.projectId === 3)).toBe(false);
     expect(projects.some((project) => project.projectId === 4)).toBe(false);
     expect(projects.some((project) => project.projectId === 5)).toBe(false);
     expect(projects.some((project) => project.projectId === 6)).toBe(false);

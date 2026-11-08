@@ -1,3 +1,4 @@
+import ExcelJS from 'exceljs';
 import { PGlite } from '@electric-sql/pglite';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -45,26 +46,34 @@ beforeAll(async () => {
 });
 
 describe('overdue investments', () => {
-  it('separates recent maturity from stale invested orders and counts all past maturities', async () => {
+  it('lists all past-maturity invested orders and aligns with Money Flow totals', async () => {
     const actions = await loadActionLists(q, NOW, { maturingDays: 14, limit: 50 });
-    expect(actions.maturing.rows.map(({ orderId, daysLeft }) => [orderId, daysLeft])).toEqual([[10, -10]]);
+    expect(actions.maturing.rows).toEqual([]);
     expect(actions.overdue.rows.map(({ orderId, daysOverdue, bucket }) => [orderId, daysOverdue, bucket])).toEqual([
       [12, 120, '90+'],
       [11, 45, '31-90'],
+      [10, 10, '1-30'],
     ]);
-    expect(actions.overdue.total).toBe(2);
-    expect(actions.overdue.amount).toBe(500);
-    expect(actions.maturing.rows.some((row) => actions.overdue.rows.some((overdueRow) => overdueRow.orderId === row.orderId))).toBe(false);
+    expect(actions.overdue.total).toBe(3);
+    expect(actions.overdue.amount).toBe(600);
 
     const flow = await loadMoneyFlow(q, RANGE, TODAY, NOW);
     expect(flow.maturity.overdue).toEqual({ count: 3, amount: 600 });
+    expect(actions.overdue).toMatchObject({ total: flow.maturity.overdue.count, amount: flow.maturity.overdue.amount });
   });
 
   it('exports the overdue list', async () => {
     const actions = await loadActionLists(q, NOW, { maturingDays: 14, limit: 50 });
     const output = listExport('overdue', actions);
     expect(output.title).toBe('Overdue: status needs update');
-    expect(output.toCsv()).toContain('One hundred twenty days overdue');
-    expect(output.toCsv()).toContain('90+');
+    const csv = output.toCsv();
+    expect(csv.split('\r\n')[0]).toBe(
+      '\uFEFFName,Phone,Email,Order ID,Project,Amount,Maturity date,Days overdue,Bucket,Lifetime value,Investments',
+    );
+    expect(csv).toContain('One hundred twenty days overdue,,,12,Project,300,2026-06-16,120,90+,0,1');
+
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(await output.toXlsx() as unknown as ArrayBuffer);
+    expect(workbook.worksheets[0]?.getRow(2).getCell(4).value).toBe(12);
   });
 });

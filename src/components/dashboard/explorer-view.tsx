@@ -75,12 +75,19 @@ export function ExplorerView({ data, params, searchParams }: Props) {
       value,
       label: `Payment method: ${value.replaceAll('_', ' ')}`,
     })),
+    ...(params.filters.investorKind !== 'all'
+      ? [{
+          key: 'ik',
+          value: params.filters.investorKind,
+          label: `Investor: ${params.filters.investorKind === 'new' ? 'New' : 'Returning'}`,
+        }]
+      : []),
   ];
   const removeChip = (key: string, value: string) => {
     const remaining = (currentQuery.get(key) ?? '').split(',').filter((item) => item !== value);
     return href({ [key]: remaining.join(',') });
   };
-  const clearDrilldownFilters = href({ seg: '', prod: '', cat: '', ten: '', rt: '', sh: '', pm: '' });
+  const clearDrilldownFilters = href({ seg: '', prod: '', cat: '', ten: '', rt: '', sh: '', pm: '', ik: '' });
   const pages = Math.max(1, Math.ceil(data.total / data.pageSize));
   const from = data.total > 0 ? (data.page - 1) * data.pageSize + 1 : 0;
   const to = Math.min(data.page * data.pageSize, data.total);

@@ -64,6 +64,8 @@ Observed 2026-10-14: confirmed reinvest deposits are 34 (about 0.2% of sales), s
 
 ## Money out
 Paid = `returns.status = 'completed'` by `returns."date"`; in flight = `initiated`; upcoming = `return_schedules."paymentDate"`.
+- **Running investment value** = `order."totalAmount"` summed across live investor orders with status `invested` whose maturity is on or after now. Maturity is the latest schedule payment date when a schedule exists, otherwise investment date plus product tenure; overdue orders are excluded.
+- **Scheduled payout liability** = future schedule installments (`return_schedules."paymentDate" >= now`) for those running investments, summed from `totalAmount` (principal plus profit). The card also shows installment count and principal/profit subtotals.
 
 ## Cash flow by month
 - Whole-life monthly view: starts at the first Dhaka month with qualifying activity and runs through the current month, capped at today. Months between first activity and today are zero-filled. The first activity month is computed from approved deposits and completed payouts on live investor users and live orders.
@@ -88,10 +90,10 @@ Entered manually per month (`monthly_targets`, Neon). Achievement = month-to-dat
 - **Sparklines (`kpiSpark`)**: one value per `series` label, zero-filled, same buckets as the trend (daily up to 92 days, monthly beyond). Sales, tickets invested and unique investors use the same filtered deposits as the KPI cards (tickets and investors are distinct per bucket, so they do not add up to the period total). Tickets booked use `order."createdAt"` (any status, product filters). Average ticket = sales / tickets invested per bucket, 0 without tickets.
 - **New investors (spark)**: an investor with a filtered deposit in the range is counted once, in the bucket of their first-ever approved deposit when that falls inside the range, so the buckets add up to the KPI "new investors".
 - **Registrations (spark)**: `user."createdAt"`; the deposit, order and product filters do not apply.
-- **Payouts**: completed payouts (`returns.status = 'completed'`) by `returns."date"` in the same buckets; no product or deposit filters.
+- **Payouts**: completed payouts (`returns.status = 'completed'`) by `returns."date"` in the same buckets; no product or deposit filters. The `excludeReinvest` (`xr=1`) filter excludes payouts with `returns."paymentMethod" = 'reinvest'`; NULL or other payment methods remain.
 - **Sales vs reinvest**: approved deposits of the last 6 Dhaka months including the current one (up to today), split into `paymentMethod = 'reinvest'` and everything else. Ignores the filters and the selected range. `month` is the first day of the month.
 - **By project / by category**: sales in the range with every active filter, top 5 plus an "Others" row for the rest; `share` is value / sum of the returned rows x 100. A product in several categories counts in each, so category shares are shares of that sum (it can exceed total sales).
-- **Payouts by category**: completed payouts in the range by the paid order's product category, top 5 plus "Others", same multi-category rule, no filters.
+- **Payouts by category**: completed payouts in the range by the paid order's product category, top 5 plus "Others", same multi-category rule. Only `excludeReinvest` (`xr=1`) applies; NULL or other payment methods remain.
 - **Investor totals**: `registered` = all-time investors; `everInvested` = investors with at least one approved deposit; `active` = investors in segment Active. Segments reuse `segments()` from the Investors tab and follow the maturity rules in the Segments table above.
 - **Recent activity**: the latest 10 events, newest first, from approved or pending deposits (`deposits."date"`), completed payouts (`returns."date"`), investor registrations and bookings (orders with status `booked` or `verifying`, by `order."createdAt"`). Not filtered. Events dated after the current time are left out (the source contains a few future-dated rows).
 

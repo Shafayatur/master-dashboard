@@ -19,7 +19,7 @@ export interface ExplorerColumn {
 export interface ExplorerParams {
   table: ExplorerTable;
   range: DateRange;
-  filters: Pick<Filters, 'products' | 'categories' | 'tenures' | 'returnTypes' | 'shariah' | 'paymentMethod'>;
+  filters: Pick<Filters, 'products' | 'categories' | 'tenures' | 'returnTypes' | 'shariah' | 'paymentMethod' | 'investorKind'>;
   segments: Segment[];
   search: string;
   status: string[];
@@ -60,6 +60,7 @@ interface TableDef {
 
 const INVESTOR_JOIN = `JOIN "user" u ON u.id = o."userId" AND u."deletedAt" IS NULL AND u."userType"::text = 'investor'`;
 const ORDER_JOIN = `JOIN "order" o ON o.id = X."orderId" AND o."deletedAt" IS NULL`;
+const investorFirstDepJoin = `LEFT JOIN (SELECT o2."userId" AS user_id, MIN(d2."date") AS first_dep FROM deposits d2 JOIN "order" o2 ON o2.id = d2."orderId" WHERE d2."deletedAt" IS NULL AND o2."deletedAt" IS NULL AND d2.status::text = 'approved' GROUP BY o2."userId") fd ON fd.user_id = u.id`;
 const day = (col: string) => `to_char(${dhakaTs(col)}, 'YYYY-MM-DD')`;
 const WHO = (key: string, sql: string, label: string): Col => ({ key, label, kind: 'text', sql });
 const investorSegmentJoin = (nowTs: string, recent: string, cooling: string) => `LEFT JOIN (
@@ -192,6 +193,7 @@ export function parseExplorerParams(sp: RawParams, today: string): ExplorerParam
       returnTypes: parsedFilters.returnTypes,
       shariah: parsedFilters.shariah,
       paymentMethod: parsedFilters.paymentMethod,
+      investorKind: parsedFilters.investorKind,
     },
     segments: parsedFilters.segments,
     search: get('q').trim().slice(0, MAX_SEARCH),
@@ -207,15 +209,29 @@ const escapeLike = (s: string): string => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 function build(params: ExplorerParams, now: Date) {
   const def = TABLES[params.table];
   const p = new Params();
-  const from = params.table === 'investors'
+  const baseFrom = params.table === 'investors'
     ? `"user" u ${investorSegmentJoin(
         `${p.add(pgTs(now))}::timestamp`,
         `${p.add(DEFAULT_THRESHOLDS.recentlyActiveDays)}::int`,
         `${p.add(DEFAULT_THRESHOLDS.coolingDays)}::int`,
       )}`
     : def.from;
+  const from = params.filters.investorKind !== 'all'
+    ? `${baseFrom} ${investorFirstDepJoin}`
+    : baseFrom;
   const { start, end } = utcBounds(params.range);
-  const conds = [...def.where, `${def.dateCol} >= ${p.add(start)}::timestamp`, `${def.dateCol} < ${p.add(end)}::timestamp`];
+  const startTs = `${p.add(start)}::timestamp`;
+  const endTs = `${p.add(end)}::timestamp`;
+  const hasInvestorKind = params.filters.investorKind !== 'all';
+  const dateConds = params.table === 'investors' && hasInvestorKind
+    ? [`EXISTS (SELECT 1 FROM deposits d_range JOIN "order" o_range ON o_range.id = d_range."orderId" AND o_range."deletedAt" IS NULL WHERE o_range."userId" = u.id AND d_range."deletedAt" IS NULL AND d_range.status::text = 'approved' AND d_range."date" >= ${startTs} AND d_range."date" < ${endTs})`]
+    : [`${def.dateCol} >= ${startTs}`, `${def.dateCol} < ${endTs}`];
+  const conds = [...def.where, ...dateConds];
+  if (hasInvestorKind) {
+    conds.push(params.filters.investorKind === 'new'
+      ? `fd.first_dep >= ${startTs} AND fd.first_dep < ${endTs}`
+      : `fd.first_dep < ${startTs}`);
+  }
   if (def.statusCol && params.status.length) conds.push(`${def.statusCol} = ANY(${p.add(params.status)}::text[])`);
   if (params.search.length >= 2) conds.push(def.search(p.add(`%${escapeLike(params.search)}%`), p.add(params.search)));
   if (params.table !== 'investors') {

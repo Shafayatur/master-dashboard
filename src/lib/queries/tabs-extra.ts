@@ -323,19 +323,26 @@ async function registrationsSeries(
   const startParam = p.add(start);
   const endParam = p.add(end);
   const rows = await q(
-    `WITH fd AS (
+    `WITH fd AS MATERIALIZED (
   SELECT o."userId", MIN(d."date") AS first_dep
   FROM deposits d
   JOIN "order" o ON o.id = d."orderId" AND o."deletedAt" IS NULL
   WHERE d."deletedAt" IS NULL AND d.status::text = 'approved'
   GROUP BY o."userId"
+), u_filtered AS MATERIALIZED (
+  SELECT u.id, u."createdAt" FROM "user" u
+  WHERE u."deletedAt" IS NULL AND u."userType"::text = 'investor'
+    AND u."createdAt" >= ${startParam}::timestamp AND u."createdAt" < ${endParam}::timestamp
+), joined AS MATERIALIZED (
+  SELECT u_filtered.id, u_filtered."createdAt", fd."userId" AS fd_user_id
+  FROM u_filtered
+  FULL OUTER JOIN fd ON fd."userId" = u_filtered.id
 )
 SELECT to_char(date_trunc('${bucket}', u."createdAt" + interval '6 hours'), 'YYYY-MM-DD') AS label,
   COUNT(*)::int AS registered,
-  COUNT(fd."userId")::int AS invested
-FROM "user" u LEFT JOIN fd ON fd."userId" = u.id
-WHERE u."deletedAt" IS NULL AND u."userType"::text = 'investor'
-  AND u."createdAt" >= ${startParam}::timestamp AND u."createdAt" < ${endParam}::timestamp
+  COUNT(u.fd_user_id)::int AS invested
+FROM joined u
+WHERE u.id IS NOT NULL
 GROUP BY 1 ORDER BY 1`,
     p.values,
   );
