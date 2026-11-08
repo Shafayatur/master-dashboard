@@ -37,7 +37,7 @@ export function TargetsView({ data, unit }: { data: TargetsOverview; unit: Money
       </div>
 
       <ChartCard title="Target vs achieved" subtitle="Monthly investment value · last 12 months">
-        <BarChart items={chartItems} unit={unit} />
+        <BarChart items={chartItems} unit={unit} mode="grouped" />
       </ChartCard>
 
       <div className="grid gap-4 xl:grid-cols-3">

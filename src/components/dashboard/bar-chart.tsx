@@ -21,6 +21,7 @@ interface Props {
   unit: MoneyUnit;
   kind?: 'money' | 'int';
   height?: number;
+  mode?: 'stacked' | 'grouped';
 }
 
 function niceStep(value: number): number {
@@ -35,7 +36,7 @@ function fillColor(color: string): string {
   return COLOR_VALUES[color] ?? color;
 }
 
-export function BarChart({ items, unit, kind = 'money', height = 220 }: Props) {
+export function BarChart({ items, unit, kind = 'money', height = 220, mode = 'stacked' }: Props) {
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(640);
   const [hover, setHover] = useState<number | null>(null);
@@ -53,7 +54,9 @@ export function BarChart({ items, unit, kind = 'money', height = 220 }: Props) {
   const plotWidth = width - PAD.l - PAD.r;
   const plotHeight = height - PAD.t - PAD.b;
   const slotWidth = plotWidth / items.length;
-  const highest = Math.max(0, ...items.map((item) => item.values.reduce((sum, part) => sum + Math.max(0, part.value), 0)));
+  const highest = mode === 'grouped'
+    ? Math.max(0, ...items.flatMap((item) => item.values.map((part) => Math.max(0, part.value))))
+    : Math.max(0, ...items.map((item) => item.values.reduce((sum, part) => sum + Math.max(0, part.value), 0)));
   const step = niceStep(highest / 3);
   const max = step * 3;
   const y = (value: number) => PAD.t + (1 - value / max) * plotHeight;
@@ -61,6 +64,7 @@ export function BarChart({ items, unit, kind = 'money', height = 220 }: Props) {
   const ticks = [0, 1, 2, 3].map((index) => index * step);
   const labelStride = slotWidth >= 36 ? 1 : slotWidth < 18 ? 3 : 2;
   const selected = hover === null ? null : items[hover];
+  const legendValues = items[0]?.values ?? [];
   const selectedTotal = selected?.values.reduce((sum, part) => sum + part.value, 0) ?? 0;
   const format = (value: number) => (kind === 'int' ? formatInt(Math.round(value)) : formatMoney(value, unit));
 
@@ -80,7 +84,9 @@ export function BarChart({ items, unit, kind = 'money', height = 220 }: Props) {
         width={width}
         height={height}
         role="img"
-        aria-label={`Stacked column chart with ${items.length} periods, total ${format(items.reduce((sum, item) => sum + item.values.reduce((itemSum, part) => itemSum + part.value, 0), 0))}`}
+        aria-label={mode === 'grouped'
+          ? `Grouped column chart with ${items.length} periods`
+          : `Stacked column chart with ${items.length} periods, total ${format(items.reduce((sum, item) => sum + item.values.reduce((itemSum, part) => itemSum + part.value, 0), 0))}`}
         onMouseMove={onMove}
         onMouseLeave={() => setHover(null)}
       >
@@ -94,18 +100,26 @@ export function BarChart({ items, unit, kind = 'money', height = 220 }: Props) {
         ))}
         {items.map((item, index) => {
           let accumulated = 0;
-          const barWidth = Math.min(32, slotWidth * 0.65);
+          const groupWidth = Math.min(44, slotWidth * 0.76);
+          const stackedBarWidth = Math.min(32, slotWidth * 0.65);
+          const groupGap = 2;
+          const groupedBarWidth = (groupWidth - groupGap * Math.max(0, item.values.length - 1)) / item.values.length;
           return (
             <g key={`${item.label}-${index}`} opacity={hover === null || hover === index ? 1 : 0.45}>
               {item.values.map((part, partIndex) => {
                 const value = Math.max(0, part.value);
                 const segmentHeight = (value / max) * plotHeight;
-                const rectY = y(accumulated + value);
-                accumulated += value;
+                const isGrouped = mode === 'grouped';
+                const rectY = isGrouped ? y(value) : y(accumulated + value);
+                const barWidth = isGrouped ? groupedBarWidth : stackedBarWidth;
+                const barX = isGrouped
+                  ? x(index) - groupWidth / 2 + partIndex * (groupedBarWidth + groupGap)
+                  : x(index) - barWidth / 2;
+                if (!isGrouped) accumulated += value;
                 return (
                   <rect
                     key={`${part.name}-${partIndex}`}
-                    x={x(index) - barWidth / 2}
+                    x={barX}
                     y={rectY}
                     width={barWidth}
                     height={Math.max(0, segmentHeight)}
@@ -127,6 +141,16 @@ export function BarChart({ items, unit, kind = 'money', height = 220 }: Props) {
           <line x1={x(hover)} x2={x(hover)} y1={PAD.t} y2={height - PAD.b} stroke="rgb(var(--muted))" strokeOpacity="0.5" />
         )}
       </svg>
+      {mode === 'grouped' && legendValues.length > 0 && (
+        <div className="mb-2 flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-muted" aria-label="Chart legend">
+          {legendValues.map((part, index) => (
+            <span key={`${part.name}-${index}`} className="inline-flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full" style={{ backgroundColor: fillColor(part.color) }} aria-hidden />
+              {part.name}
+            </span>
+          ))}
+        </div>
+      )}
       {hover !== null && selected && (
         <div
           className="pointer-events-none absolute top-2 z-10 min-w-36 rounded-lg border border-line bg-surface px-3 py-2 text-xs shadow-md"
@@ -142,10 +166,12 @@ export function BarChart({ items, unit, kind = 'money', height = 220 }: Props) {
               <span className="tabular-nums">{format(part.value)}</span>
             </p>
           ))}
-          <p className="mt-1 flex justify-between gap-3 border-t border-line pt-1 font-medium">
-            <span>Total</span>
-            <span className="tabular-nums">{format(selectedTotal)}</span>
-          </p>
+          {mode !== 'grouped' && (
+            <p className="mt-1 flex justify-between gap-3 border-t border-line pt-1 font-medium">
+              <span>Total</span>
+              <span className="tabular-nums">{format(selectedTotal)}</span>
+            </p>
+          )}
         </div>
       )}
     </div>

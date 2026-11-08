@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { AreaChart } from './area-chart';
 import { chartColor, CHART_COLORS } from './chart-colors';
 import { ChartCard } from './chart-card';
+import { BarChart } from '@/components/dashboard/bar-chart';
 import { DonutChart, DonutLegend } from './donut-chart';
 import { ExportBar } from './export-bar';
 import { ChartGallery } from './gallery';
@@ -53,6 +54,29 @@ describe('ChartCard', () => {
     const out = html(<ChartCard title="Sales">body</ChartCard>);
     expect(out).not.toContain('mt-0.5');
     expect(out).not.toContain('shrink-0');
+  });
+});
+
+describe('BarChart', () => {
+  it('renders grouped bars side by side and scales to the largest series value', () => {
+    const out = html(
+      <BarChart
+        mode="grouped"
+        kind="int"
+        unit="m"
+        items={[{ label: 'Jan', values: [{ name: 'Target', color: '#123456', value: 100 }, { name: 'Achieved', color: '#654321', value: 80 }] }]}
+      />,
+    );
+    const barXs = Array.from(out.matchAll(/<rect\b[^>]*\bx="([^"]+)"/g), (match) => Number(match[1]));
+    expect(barXs).toHaveLength(2);
+    expect(barXs[0]).not.toBe(barXs[1]);
+    expect(out).toContain('Grouped column chart with 1 periods');
+    expect(out).toContain('>150</text>');
+    expect(out).not.toContain('>300</text>');
+    expect(out).toContain('>Target</span>');
+    expect(out).toContain('>Achieved</span>');
+    expect(out).not.toContain('>Total</span>');
+    clean(out);
   });
 });
 
