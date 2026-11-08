@@ -1,5 +1,8 @@
+'use client';
+
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
+import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { formatInt, formatMoney, type MoneyUnit } from '@/lib/format/money';
 import type { InvestorProfile } from '@/lib/queries/investor-profile';
@@ -10,6 +13,8 @@ interface Props {
 }
 
 const card = 'rounded-xl border border-line bg-surface p-4';
+type ProfileTab = 'investments' | 'deposits' | 'payouts';
+
 const segmentStyle = {
   active: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
   recently_active: 'bg-sky-500/10 text-sky-600 dark:text-sky-400',
@@ -69,11 +74,9 @@ interface ProfileRow {
 }
 
 function ProfileTable({
-  title,
   columns,
   rows,
 }: {
-  title: string;
   columns: ProfileColumn[];
   rows: ProfileRow[];
 }) {
@@ -85,8 +88,7 @@ function ProfileTable({
     ].join(' ');
 
   return (
-    <section className={card}>
-      <h3 className="text-sm font-medium">{title}</h3>
+    <div>
       {rows.length === 0 ? (
         <p className="mt-4 text-sm text-muted">No records.</p>
       ) : (
@@ -117,11 +119,12 @@ function ProfileTable({
           </table>
         </div>
       )}
-    </section>
+    </div>
   );
 }
 
 export function InvestorProfileView({ p, unit }: Props) {
+  const [activeTab, setActiveTab] = useState<ProfileTab>('investments');
   const nextMaturity = p.nextMaturity;
   const daysDescription = nextMaturity
     ? nextMaturity.daysLeft < 0
@@ -190,72 +193,126 @@ export function InvestorProfileView({ p, unit }: Props) {
       </div>
 
 
-      <ProfileTable
-        title="Investments"
-        columns={[
-          { key: 'project', label: 'Project', flex: true },
-          { key: 'status', label: 'Status' },
-          { key: 'order', label: 'Order' },
-          { key: 'booked', label: 'Booked' },
-          { key: 'invested', label: 'Invested' },
-          { key: 'matures', label: 'Matures' },
-          { key: 'amount', label: 'Amount', align: 'right' },
-        ]}
-        rows={p.orders.map((order) => ({
-          key: order.orderId,
-          values: {
-            order: formatInt(order.orderId),
-            project: order.project,
-            status: <StatusPill key={`order-status-${order.orderId}`} status={order.status} />,
-            amount: formatMoney(order.amount, unit),
-            booked: order.created,
-            invested: order.investmentDate ?? '-',
-            matures: order.maturity ?? '-',
-          },
-        }))}
-      />
+      <section className={card}>
+        <div role="tablist" aria-label="Investor records" className="mb-4 inline-flex rounded-lg border border-line p-0.5 text-xs">
+          {([
+            { id: 'investments', label: 'Investments', count: p.orders.length },
+            { id: 'deposits', label: 'Deposits', count: p.deposits.length },
+            { id: 'payouts', label: 'Payouts', count: p.payouts.length },
+          ] as const).map((tab) => (
+            <button
+              key={tab.id}
+              id={`profile-tab-${tab.id}`}
+              type="button"
+              role="tab"
+              aria-selected={activeTab === tab.id}
+              aria-controls={`profile-panel-${tab.id}`}
+              tabIndex={activeTab === tab.id ? 0 : -1}
+              onClick={() => setActiveTab(tab.id)}
+              onKeyDown={(event) => {
+                const tabIds: ProfileTab[] = ['investments', 'deposits', 'payouts'];
+                const currentIndex = tabIds.indexOf(tab.id);
+                const nextIndex = event.key === 'ArrowRight'
+                  ? (currentIndex + 1) % tabIds.length
+                  : event.key === 'ArrowLeft'
+                    ? (currentIndex - 1 + tabIds.length) % tabIds.length
+                    : event.key === 'Home'
+                      ? 0
+                      : event.key === 'End'
+                        ? tabIds.length - 1
+                        : -1;
+                if (nextIndex < 0) return;
+                event.preventDefault();
+                const nextTab = tabIds[nextIndex];
+                if (nextTab) {
+                  setActiveTab(nextTab);
+                  document.getElementById(`profile-tab-${nextTab}`)?.focus();
+                }
+              }}
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 ${
+                activeTab === tab.id ? 'bg-line font-medium text-fg' : 'text-muted hover:text-fg'
+              }`}
+            >
+              {tab.label}
+              <span className="rounded-full bg-surface px-1.5 py-0.5 tabular-nums text-muted">{formatInt(tab.count)}</span>
+            </button>
+          ))}
+        </div>
 
-
-      <ProfileTable
-        title="Deposits"
-        columns={[
-          { key: 'date', label: 'Date' },
-          { key: 'method', label: 'Method', flex: true },
-          { key: 'status', label: 'Status' },
-          { key: 'order', label: 'Order' },
-          { key: 'amount', label: 'Amount', align: 'right' },
-        ]}
-        rows={p.deposits.map((deposit) => ({
-          key: deposit.depositId,
-          values: {
-            date: deposit.date,
-            order: formatInt(deposit.orderId),
-            amount: formatMoney(deposit.amount, unit),
-            method: deposit.method,
-            status: <StatusPill key={`deposit-status-${deposit.depositId}`} status={deposit.status} />,
-          },
-        }))}
-      />
-
-
-      <ProfileTable
-        title="Payouts"
-        columns={[
-          { key: 'date', label: 'Date', flex: true },
-          { key: 'status', label: 'Status' },
-          { key: 'order', label: 'Order' },
-          { key: 'amount', label: 'Amount', align: 'right' },
-        ]}
-        rows={p.payouts.map((payout) => ({
-          key: payout.payoutId,
-          values: {
-            date: payout.date,
-            order: formatInt(payout.orderId),
-            amount: formatMoney(payout.amount, unit),
-            status: <StatusPill key={`payout-status-${payout.payoutId}`} status={payout.status} />,
-          },
-        }))}
-      />
+        <div
+          id={`profile-panel-${activeTab}`}
+          role="tabpanel"
+          aria-labelledby={`profile-tab-${activeTab}`}
+          tabIndex={0}
+          className="focus-visible:outline-none"
+        >
+          {activeTab === 'investments' && (
+            <ProfileTable
+              columns={[
+                { key: 'project', label: 'Project', flex: true },
+                { key: 'status', label: 'Status' },
+                { key: 'order', label: 'Order' },
+                { key: 'booked', label: 'Booked' },
+                { key: 'invested', label: 'Invested' },
+                { key: 'matures', label: 'Matures' },
+                { key: 'amount', label: 'Amount', align: 'right' },
+              ]}
+              rows={p.orders.map((order) => ({
+                key: order.orderId,
+                values: {
+                  order: formatInt(order.orderId),
+                  project: order.project,
+                  status: <StatusPill key={`order-status-${order.orderId}`} status={order.status} />,
+                  amount: formatMoney(order.amount, unit),
+                  booked: order.created,
+                  invested: order.investmentDate ?? '-',
+                  matures: order.maturity ?? '-',
+                },
+              }))}
+            />
+          )}
+          {activeTab === 'deposits' && (
+            <ProfileTable
+              columns={[
+                { key: 'date', label: 'Date' },
+                { key: 'method', label: 'Method', flex: true },
+                { key: 'status', label: 'Status' },
+                { key: 'order', label: 'Order' },
+                { key: 'amount', label: 'Amount', align: 'right' },
+              ]}
+              rows={p.deposits.map((deposit) => ({
+                key: deposit.depositId,
+                values: {
+                  date: deposit.date,
+                  order: formatInt(deposit.orderId),
+                  amount: formatMoney(deposit.amount, unit),
+                  method: deposit.method,
+                  status: <StatusPill key={`deposit-status-${deposit.depositId}`} status={deposit.status} />,
+                },
+              }))}
+            />
+          )}
+          {activeTab === 'payouts' && (
+            <ProfileTable
+              columns={[
+                { key: 'date', label: 'Date', flex: true },
+                { key: 'status', label: 'Status' },
+                { key: 'order', label: 'Order' },
+                { key: 'amount', label: 'Amount', align: 'right' },
+              ]}
+              rows={p.payouts.map((payout) => ({
+                key: payout.payoutId,
+                values: {
+                  date: payout.date,
+                  order: formatInt(payout.orderId),
+                  amount: formatMoney(payout.amount, unit),
+                  status: <StatusPill key={`payout-status-${payout.payoutId}`} status={payout.status} />,
+                },
+              }))}
+            />
+          )}
+        </div>
+      </section>
     </div>
   );
 }
