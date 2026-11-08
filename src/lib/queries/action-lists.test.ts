@@ -29,7 +29,8 @@ beforeAll(async () => {
       (1,'invested',15000,'2026-04-20','2026-04-20',1,1), (2,'invested',8000,'2026-04-01','2026-04-01',2,1), (3,'invested',9000,'2026-05-30','2026-05-30',3,1),
       (4,'closed',100000,'2026-03-01','2026-03-01',4,1), (5,'closed',20000,'2026-03-10','2026-03-10',5,1), (6,'closed',5000,'2026-04-05','2026-04-05',6,1),
       (7,'closed',7000,'2026-01-01','2026-01-01',7,1), (8,'closed',6000,'2026-03-05','2026-03-05',8,1), (9,'invested',6000,'2026-09-01','2026-09-01',8,1),
-      (10,'booked',12000,NULL,'2026-10-01',9,1), (11,'verifying',3000,NULL,'2026-10-12',9,1), (12,'booked',4000,NULL,'2026-09-01',10,1);
+      (10,'booked',12000,NULL,'2026-10-01',9,1), (11,'verifying',3000,NULL,'2026-10-12',9,1), (12,'booked',4000,NULL,'2026-09-01',10,1),
+      (13,'invested',5000,'2026-04-09','2026-04-09',2,1);
     INSERT INTO return_schedules (id, "orderId", "paymentDate") VALUES (1, 1, '2026-10-20');
     INSERT INTO deposits (id, "date", amount, "paymentMethod", status, "orderId") VALUES
       (1,'2026-03-01',500000,'bank_deposit','approved',4), (2,'2026-03-10',20000,'bank_deposit','approved',5),
@@ -38,19 +39,19 @@ beforeAll(async () => {
 });
 
 describe('loadActionLists', () => {
-  it('maturing: only upcoming running investments within the selected window', async () => {
+  it('maturing: upcoming investments and orders within the 5-day disbursement grace period', async () => {
     const d = await loadActionLists(q, NOW, { maturingDays: 14, limit: 50 });
-    expect(d.maturing.rows.map((r) => [r.orderId, r.maturity, r.daysLeft])).toEqual([[1, '2026-10-20', 6]]);
-    expect(d.maturing.total).toBe(1);
-    expect(d.maturing.amount).toBe(15000);
-    expect(d.maturing.rows[0]).toMatchObject({ name: 'User One', phone: '01711000001', project: 'Dairy A', amount: 15000, investments: 1 });
-    expect(d.overdue.rows.map(({ orderId, daysOverdue, bucket }) => [orderId, daysOverdue, bucket])).toContainEqual([2, 13, '1-30']);
+    expect(d.maturing.rows.map((r) => [r.orderId, r.maturity, r.daysLeft])).toEqual([[13, '2026-10-09', -5], [1, '2026-10-20', 6]]);
+    expect(d.maturing.total).toBe(2);
+    expect(d.maturing.amount).toBe(20000);
+    expect(d.maturing.rows.find((r) => r.orderId === 1)).toMatchObject({ name: 'User One', phone: '01711000001', project: 'Dairy A', amount: 15000, investments: 1 });
+    expect(d.overdue.rows.map(({ orderId, daysOverdue, bucket }) => [orderId, daysOverdue, bucket])).toEqual([[2, 13, '1-30']]);
   });
-  it('maturing window is adjustable and does not include past maturities', async () => {
+  it('maturing window is adjustable and includes the 5-day disbursement grace period', async () => {
     const d = await loadActionLists(q, NOW, { maturingDays: 7, limit: 50 });
-    expect(d.maturing.rows.map((r) => r.orderId)).toEqual([1]);
-    const none = await loadActionLists(q, NOW, { maturingDays: 3, limit: 50 });
-    expect(none.maturing.rows).toEqual([]);
+    expect(d.maturing.rows.map((r) => r.orderId)).toEqual([13, 1]);
+    const shortWindow = await loadActionLists(q, NOW, { maturingDays: 3, limit: 50 });
+    expect(shortWindow.maturing.rows.map((r) => r.orderId)).toEqual([13]);
   });
   it('cooling: last project matured 30-60 days ago, nothing running, richest first', async () => {
     const d = await loadActionLists(q, NOW, { maturingDays: 14, limit: 50 });
@@ -71,7 +72,7 @@ describe('loadActionLists', () => {
   it('keeps the true total when the row limit cuts the list', async () => {
     const d = await loadActionLists(q, NOW, { maturingDays: 60, limit: 1 });
     expect(d.maturing.rows).toHaveLength(1);
-    expect(d.maturing.total).toBe(2);
+    expect(d.maturing.total).toBe(3);
     expect(JSON.parse(JSON.stringify(d))).toEqual(d);
   });
   it('builds a call-sheet CSV per list', async () => {

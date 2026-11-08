@@ -20,7 +20,7 @@ interface Props {
   filters: Filters;
 }
 
-const SHOW_OVERDUE_UI = false;
+const SHOW_OVERDUE_UI = true;
 
 const toneColor = {
   good: 'bg-emerald-500',
@@ -243,7 +243,7 @@ export function MoneyFlowView({ data, unit, filters }: Props) {
       <ChartCard title="Maturity calendar (principal reaching maturity)">
         {SHOW_OVERDUE_UI && data.maturity.overdue.count > 0 && (
           <p className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
-            {formatInt(data.maturity.overdue.count)} investments worth {formatMoney(data.maturity.overdue.amount, unit)} are past maturity but still marked invested.
+            {formatInt(data.maturity.overdue.count)} investments worth {formatMoney(data.maturity.overdue.amount, unit)} are more than 5 days past maturity but still marked invested.
           </p>
         )}
         <BarChart

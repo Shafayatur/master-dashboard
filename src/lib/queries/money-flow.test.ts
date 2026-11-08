@@ -26,7 +26,8 @@ beforeAll(async () => {
     INSERT INTO "order" (id, status, "totalAmount", "investmentDate", "userId", "productId") VALUES
       (1,'closed',10000,'2026-01-01',1,1), (2,'closed',20000,'2026-01-01',2,1), (3,'closed',30000,'2026-01-01',3,1),
       (4,'invested',20000,'2026-06-01',1,1), (5,'invested',10000,'2026-05-18',4,1), (6,'invested',8000,'2026-04-01',5,1),
-      (7,'invested',12000,'2026-05-01',1,1), (8,'invested',99999,'2026-05-01',6,1);
+      (7,'invested',12000,'2026-05-01',1,1), (8,'invested',99999,'2026-05-01',6,1),
+      (9,'invested',7000,'2026-04-09',2,1);
     INSERT INTO return_schedules (id, "orderId", "paymentDate", "profitAmount", "principalAmount", "totalAmount") VALUES
       (1,5,'2026-10-16',500,0,500), (2,5,'2026-11-18',500,10000,10500);
     INSERT INTO returns (id, "date", amount, status, "orderId") VALUES
@@ -64,7 +65,7 @@ describe('loadMoneyFlow', () => {
     expect(d.schedule.weeks).toHaveLength(12);
     expect(d.schedule.weeks[0]).toEqual({ week: '2026-10-12', count: 1, total: 500, profit: 500, principal: 0 });
     expect(d.schedule.weeks.find((w) => w.week === '2026-11-16')).toMatchObject({ total: 10500, principal: 10000 });
-    expect(d.schedule.coverage).toEqual({ invested: 4, withSchedule: 1 }); // staff order excluded
+    expect(d.schedule.coverage).toEqual({ invested: 5, withSchedule: 1 }); // staff order excluded
   });
 
   it('running portfolio excludes overdue invested orders and totals future schedule liability', async () => {
@@ -83,7 +84,7 @@ describe('loadMoneyFlow', () => {
     });
   });
 
-  it('maturity calendar: principal per week, plus past-maturity orders still marked invested', async () => {
+  it('maturity calendar: principal per week, excluding grace-window orders from overdue and calendar buckets', async () => {
     const d = await loadMoneyFlow(q, SEPT, TODAY, NOW);
     expect(d.maturity.overdue).toEqual({ count: 1, amount: 8000 });
     const by = Object.fromEntries(d.maturity.weeks.filter((w) => w.count).map((w) => [w.week, w.principal]));
@@ -115,7 +116,7 @@ describe('buildMoneyFlowInsights', () => {
   it('flags overdue orders, thin schedule coverage and the reinvestment split', async () => {
     const texts = buildMoneyFlowInsights(await loadMoneyFlow(q, SEPT, TODAY, NOW), 'm').map((i) => i.text);
     expect(texts.some((t) => t.includes('past maturity but still marked invested'))).toBe(true);
-    expect(texts.some((t) => t.includes('Only 25% of running investments have a payout schedule'))).toBe(true);
+    expect(texts.some((t) => t.includes('Only 20% of running investments have a payout schedule'))).toBe(true);
     expect(texts.some((t) => t.includes('5.0K confirmed') && t.includes('4.0K estimated'))).toBe(true);
     expect(texts.some((t) => t.includes('window is still open'))).toBe(true);
   });

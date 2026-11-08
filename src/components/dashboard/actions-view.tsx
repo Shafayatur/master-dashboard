@@ -8,7 +8,7 @@ import { CountUp } from './count-up';
 import { PageTools } from './page-tools';
 
 const windows = [7, 14, 30] as const;
-const SHOW_OVERDUE_UI = false;
+const SHOW_OVERDUE_UI = true;
 
 function InvestorCell({ investor }: { investor: Contact }) {
   return (
@@ -88,7 +88,7 @@ export function ActionsView({ data, unit }: { data: ActionListsData; unit: Money
       <div className="grid gap-4 xl:grid-cols-2">
         <ActionListCard
           title="Maturing soon"
-          description="Active orders reaching maturity in the next 30 days."
+          description={`Active orders maturing within ${data.maturingDays} days, plus orders in the 5-day disbursement grace period.`}
           total={data.maturing.total}
           amountLabel={`Invested amount: ${formatMoney(data.maturing.amount, unit)}`}
           shown={data.maturing.rows.length}
@@ -104,12 +104,12 @@ export function ActionsView({ data, unit }: { data: ActionListsData; unit: Money
             formatMoney(row.lifetimeValue, unit),
             formatInt(row.investments),
           ])}
-          emptyText="No investments are maturing in this window."
+          emptyText="No investments are in the selected maturity window or grace period."
         />
         {SHOW_OVERDUE_UI && (
         <ActionListCard
           title="Overdue: status needs update"
-          description="Invested orders past their maturity date (1–30, 31–90, and 90+ days). Follow up on payout or update the stale order status."
+          description="Invested orders more than 5 days past maturity (1–30, 31–90, and 90+ days). Follow up on payout or update the stale order status."
           total={data.overdue.total}
           amountLabel={`Invested amount: ${formatMoney(data.overdue.amount, unit)}`}
           shown={data.overdue.rows.length}
@@ -127,7 +127,7 @@ export function ActionsView({ data, unit }: { data: ActionListsData; unit: Money
             formatMoney(row.lifetimeValue, unit),
             formatInt(row.investments),
           ])}
-          emptyText="No investments are past maturity."
+          emptyText="No investments are more than 5 days past maturity."
         />
         )}
         <ActionListCard

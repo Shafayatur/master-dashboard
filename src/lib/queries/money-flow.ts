@@ -6,6 +6,7 @@ import { attention } from './overview';
 import { Params, investorJoin, pgTs, salesBase, utcBounds, type QueryFn } from './sql-filters';
 
 export const REINVEST_WINDOW_DAYS = 30;
+export const OVERDUE_GRACE_DAYS = 5;
 const WEEKS = 12;
 
 export interface PayoutMonth {
@@ -198,10 +199,13 @@ async function maturity(q: QueryFn, now: string, today: string) {
   FROM "order" o JOIN products p ON p.id = o."productId" ${investorJoin('o."userId"')} LEFT JOIN sched s ON s."orderId" = o.id
   WHERE o."deletedAt" IS NULL AND o.status::text = 'invested'
 )
-SELECT CASE WHEN maturity < $1::timestamp THEN 'overdue' ELSE to_char(date_trunc('week', ${dhakaTs('maturity')}), 'YYYY-MM-DD') END AS bucket,
+SELECT CASE WHEN maturity < $1::timestamp - (${OVERDUE_GRACE_DAYS}::int * interval '1 day')
+    THEN 'overdue' ELSE to_char(date_trunc('week', ${dhakaTs('maturity')}), 'YYYY-MM-DD') END AS bucket,
   COUNT(*)::int AS n, COALESCE(SUM(amount), 0)::float8 AS amount
 FROM m
-WHERE maturity < $1::timestamp + ($2::int * interval '1 day')
+WHERE (maturity < $1::timestamp - (${OVERDUE_GRACE_DAYS}::int * interval '1 day')
+    OR maturity >= $1::timestamp)
+  AND maturity < $1::timestamp + ($2::int * interval '1 day')
 GROUP BY 1`,
     [now, WEEKS * 7],
   );

@@ -16,7 +16,7 @@ export function buildMoneyFlowInsights(d: MoneyFlowData, unit: MoneyUnit): Insig
     out.push({ tone: 'info', text: `Over the next 4 weeks ${m(due)} is scheduled to be paid out and ${m(maturing)} of principal reaches maturity. That money is the reinvestment pool.` });
   }
   if (d.maturity.overdue.count > 0) {
-    out.push({ tone: 'warn', text: `${formatInt(d.maturity.overdue.count)} investments worth ${m(d.maturity.overdue.amount)} are past maturity but still marked invested. Check whether they were paid or their status is stale.` });
+    out.push({ tone: 'warn', text: `${formatInt(d.maturity.overdue.count)} investments worth ${m(d.maturity.overdue.amount)} are more than 5 days past maturity but still marked invested. Check whether they were paid or their status is stale.` });
   }
   const cov = pct(d.schedule.coverage.withSchedule, d.schedule.coverage.invested);
   if (d.schedule.coverage.invested > 0 && cov < 70) {
