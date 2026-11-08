@@ -14,9 +14,9 @@ export const metadata: Metadata = { title: 'Projects & Tenure' };
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
-async function Loaded({ filters, today, unit, searchParams }: { filters: Filters; today: string; unit: MoneyUnit; searchParams: SearchParams }) {
+async function Loaded({ filters, today, unit }: { filters: Filters; today: string; unit: MoneyUnit }) {
   const [data, activeProjects] = await Promise.all([getProjects(filters, today), getActiveProjects(today)]);
-  return <ProjectsView data={data} activeProjects={activeProjects} filters={filters} unit={unit} searchParams={searchParams} />;
+  return <ProjectsView data={data} activeProjects={activeProjects} filters={filters} unit={unit} />;
 }
 
 export default async function ProjectsPage(props: { searchParams: Promise<SearchParams> }) {
@@ -27,7 +27,7 @@ export default async function ProjectsPage(props: { searchParams: Promise<Search
   const unit = parseMoneyUnit((await cookies()).get(MONEY_UNIT_COOKIE)?.value);
   return (
     <Suspense key={`${serializeFilters(filters).toString()}|${unit}`} fallback={<CommandCenterSkeleton />}>
-      <Loaded filters={filters} today={today} unit={unit} searchParams={searchParams} />
+      <Loaded filters={filters} today={today} unit={unit} />
     </Suspense>
   );
 }

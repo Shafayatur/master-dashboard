@@ -9,6 +9,7 @@ import { Params, salesBase, type QueryFn } from './sql-filters';
 export interface ScorecardRow {
   key: string;
   label: string;
+  isActive: boolean;
   tenureMonths: number;
   returnType: string;
   value: number;
@@ -48,7 +49,7 @@ export async function projectRows(q: QueryFn, f: Filters, r: DateRange): Promise
   const b = salesBase(f, r, p, false, { includeFirstDeposit: true });
   const rows = await q(
     `WITH ${b.cte}
-SELECT p.id::text AS key, p.name AS label,
+SELECT p.id::text AS key, p.name AS label, COALESCE(p."isActive", FALSE) AS is_active,
   split_part(p."productDuration"::text, ' ', 1)::int AS tenure_months,
   p."productReturnType"::text AS return_type,
   SUM(x.amount)::float8 AS value,
@@ -58,7 +59,7 @@ SELECT p.id::text AS key, p.name AS label,
 FROM base x
 JOIN "order" o ON o.id = x."orderId"
 JOIN products p ON p.id = o."productId"
-GROUP BY p.id, p.name, p."productDuration", p."productReturnType"
+GROUP BY p.id, p.name, p."isActive", p."productDuration", p."productReturnType"
 ORDER BY value DESC
 LIMIT ${SCORECARD_LIMIT}`,
     p.values,
@@ -71,6 +72,7 @@ LIMIT ${SCORECARD_LIMIT}`,
     return {
       key: String(x.key),
       label: String(x.label),
+      isActive: x.is_active === true,
       tenureMonths: Number(x.tenure_months ?? 0),
       returnType: String(x.return_type),
       value,

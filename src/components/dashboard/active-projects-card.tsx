@@ -1,23 +1,11 @@
-import Link from 'next/link';
 import { ChartCard } from '@/components/charts/chart-card';
 import { formatInt, formatMoney, type MoneyUnit } from '@/lib/format/money';
 import type { ActiveProject } from '@/lib/queries/active-projects';
 
-type ActiveProjectFilter = 'all' | 'open' | 'fully_funded' | 'running';
-type SearchValue = string | string[] | undefined;
-
 interface Props {
   projects: ActiveProject[];
   unit: MoneyUnit;
-  searchParams: Record<string, SearchValue>;
 }
-
-const filters: { value: ActiveProjectFilter; label: string }[] = [
-  { value: 'all', label: 'All' },
-  { value: 'open', label: 'Open' },
-  { value: 'fully_funded', label: 'Fully funded' },
-  { value: 'running', label: 'Running' },
-];
 
 const statusStyles: Record<ActiveProject['status'], string> = {
   open: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
@@ -31,52 +19,13 @@ const statusLabels: Record<ActiveProject['status'], string> = {
   running: 'Running',
 };
 
-function isActiveProjectFilter(value: string | undefined): value is ActiveProjectFilter {
-  return value === 'all' || value === 'open' || value === 'fully_funded' || value === 'running';
-}
-
-export function ActiveProjectsCard({ projects, unit, searchParams }: Props) {
-  const apValue = Array.isArray(searchParams.ap) ? searchParams.ap[0] : searchParams.ap;
-  const selectedFilter = isActiveProjectFilter(apValue) ? apValue : 'all';
-  const currentQuery = new URLSearchParams();
-  for (const [key, value] of Object.entries(searchParams)) {
-    if (Array.isArray(value)) {
-      for (const item of value) currentQuery.append(key, item);
-    } else if (value !== undefined) {
-      currentQuery.set(key, value);
-    }
-  }
-  const hrefFor = (filter: ActiveProjectFilter) => {
-    const query = new URLSearchParams(currentQuery);
-    if (filter === 'all') query.delete('ap');
-    else query.set('ap', filter);
-    const queryString = query.toString();
-    return queryString ? `/projects?${queryString}` : '/projects';
-  };
-  const visibleProjects = selectedFilter === 'all'
-    ? projects
-    : projects.filter((project) => project.status === selectedFilter);
-
+export function ActiveProjectsCard({ projects, unit }: Props) {
   return (
     <ChartCard
       title="Active projects"
       subtitle="Snapshot as of now. Ignores the date range and filters. Funded % assumes the stock column counts units still available."
-      action={
-        <nav aria-label="Filter active projects" className="inline-flex rounded-md border border-line p-0.5 text-xs">
-          {filters.map((filter) => (
-            <Link
-              key={filter.value}
-              href={hrefFor(filter.value)}
-              aria-current={selectedFilter === filter.value ? 'page' : undefined}
-              className={`rounded px-2 py-1 ${selectedFilter === filter.value ? 'bg-line font-medium text-fg' : 'text-muted hover:text-fg'}`}
-            >
-              {filter.label}
-            </Link>
-          ))}
-        </nav>
-      }
     >
-      {visibleProjects.length === 0 ? (
+      {projects.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted">No active projects.</p>
       ) : (
         <div className="overflow-x-auto">
@@ -96,7 +45,7 @@ export function ActiveProjectsCard({ projects, unit, searchParams }: Props) {
               </tr>
             </thead>
             <tbody className="divide-y divide-line/70">
-              {visibleProjects.map((project) => {
+              {projects.map((project) => {
                 const funded = project.fundedPct === null ? null : Math.max(0, Math.min(project.fundedPct, 100));
                 return (
                   <tr key={project.projectId}>

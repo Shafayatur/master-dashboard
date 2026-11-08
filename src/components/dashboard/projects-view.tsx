@@ -22,7 +22,6 @@ interface Props {
   activeProjects: ActiveProject[];
   filters: Filters;
   unit: MoneyUnit;
-  searchParams: Record<string, string | string[] | undefined>;
 }
 
 const card = 'rounded-xl border border-line bg-surface p-4';
@@ -56,7 +55,7 @@ function changeHint(row: CompareRow, compare: boolean): ReactNode {
   return <span className="inline-flex rounded-full bg-line/60 px-2 py-0.5 font-medium text-muted">0.0%</span>;
 }
 
-export function ProjectsView({ data, activeProjects, filters, unit, searchParams }: Props) {
+export function ProjectsView({ data, activeProjects, filters, unit }: Props) {
   const insights = buildProjectInsights(data, unit);
   const preferredTenure = [...data.tenure].sort((a, b) => b.investors - a.investors || b.value - a.value)[0];
   const topProjectShare = data.scorecard[0]?.share ?? 0;
@@ -98,8 +97,14 @@ export function ProjectsView({ data, activeProjects, filters, unit, searchParams
         <KpiCard i={2} icon={CalendarClock} tone="emerald" label="Preferred tenure">
           {preferredTenure?.label ?? '—'}
         </KpiCard>
-        <KpiCard i={3} icon={Layers3} tone="amber" label="Active projects">
-          <CountUp value={data.scorecard.length} kind="int" />
+        <KpiCard
+          i={3}
+          icon={Layers3}
+          tone="amber"
+          label="Active projects"
+          hint={`${data.scorecard.length} with investments in period`}
+        >
+          <CountUp value={activeProjects.length} kind="int" />
         </KpiCard>
       </div>
 
@@ -141,7 +146,7 @@ export function ProjectsView({ data, activeProjects, filters, unit, searchParams
         </aside>
       </div>
 
-      <ActiveProjectsCard projects={activeProjects} unit={unit} searchParams={searchParams} />
+      <ActiveProjectsCard projects={activeProjects} unit={unit} />
       <ProjectScorecard rows={data.scorecard} unit={unit} />
     </div>
   );

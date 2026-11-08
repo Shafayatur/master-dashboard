@@ -38,7 +38,16 @@ export function ProjectScorecard({ rows, unit }: Props) {
             <tbody>
               {rows.map((row) => (
                 <tr key={row.key} className="border-t border-line">
-                  <td className="max-w-56 truncate px-3 py-3 font-medium">{row.label}</td>
+                  <td className="max-w-56 px-3 py-3 font-medium">
+                    <span className="inline-flex max-w-full items-center gap-2">
+                      <span className="truncate">{row.label}</span>
+                      {!row.isActive && (
+                        <span className="shrink-0 rounded-full bg-line/60 px-2 py-0.5 text-[10px] font-medium text-muted">
+                          Inactive
+                        </span>
+                      )}
+                    </span>
+                  </td>
                   <td className={numericCell}>{row.tenureMonths} mo</td>
                   <td className="whitespace-nowrap px-3 py-3 text-right">{row.returnType}</td>
                   <td className={numericCell}>{formatMoney(row.value, unit)}</td>

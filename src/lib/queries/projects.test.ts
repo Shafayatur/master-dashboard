@@ -22,8 +22,8 @@ beforeAll(async () => {
   await db.exec(`
     INSERT INTO "user" (id, "createdAt", "userType") VALUES (1, '2026-10-02', 'investor'), (2, '2026-10-04', 'investor'), (3, '2026-09-20', 'investor');
     INSERT INTO categories (id, name) VALUES (1, 'Dairy'), (2, 'Poultry');
-    INSERT INTO products (id, name, "productDuration", "productReturnType", "isShariah") VALUES
-      (1, 'Dairy A', '6 Months', 'percentage', false), (2, 'Poultry B', '12 Months', 'fixed', true), (3, 'Mixed C', '1 Month', 'percentage', false);
+    INSERT INTO products (id, name, "productDuration", "productReturnType", "isShariah", "isActive") VALUES
+      (1, 'Dairy A', '6 Months', 'percentage', false, true), (2, 'Poultry B', '12 Months', 'fixed', true, false), (3, 'Mixed C', '1 Month', 'percentage', false, NULL);
     INSERT INTO category_products ("categoriesId", "productsId") VALUES (1, 1), (2, 2), (1, 3), (2, 3);
     INSERT INTO "order" (id, status, "totalAmount", "createdAt", "userId", "productId") VALUES
       (1, 'invested', 10000, '2026-10-03', 1, 1), (2, 'invested', 20000, '2026-10-05', 2, 2),
@@ -44,7 +44,9 @@ describe('projectRows', () => {
     ]);
     const mixed = rows.find((r) => r.key === '3');
     expect(mixed).toMatchObject({ investors: 1, returningInvestors: 1, returningShare: 100, avgTicket: 4000 }); // user 3 first invested on 25 Sep
-    expect(rows.find((r) => r.key === '1')).toMatchObject({ returningInvestors: 0, returningShare: 0 });
+    expect(rows.find((r) => r.key === '1')).toMatchObject({ isActive: true, returningInvestors: 0, returningShare: 0 });
+    expect(rows.find((r) => r.key === '2')?.isActive).toBe(false);
+    expect(mixed?.isActive).toBe(false);
   });
 });
 
