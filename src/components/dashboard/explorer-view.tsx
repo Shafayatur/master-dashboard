@@ -23,6 +23,7 @@ const statusTone: Record<string, string> = {
   verifying: 'bg-amber-500/10 text-amber-700',
   rejected: 'bg-rose-500/10 text-rose-700',
   cancelled: 'bg-rose-500/10 text-rose-700',
+  not_initiated: 'bg-rose-500/10 text-rose-700',
   invested: 'bg-sky-500/10 text-sky-700',
 };
 
@@ -30,6 +31,7 @@ const tableStatuses: Record<ExplorerParams['table'], string[]> = {
   deposits: ['approved', 'pending', 'rejected'],
   orders: ['closed', 'cancelled', 'invested', 'booked', 'verifying'],
   payouts: ['completed', 'initiated'],
+  maturities: ['completed', 'initiated', 'not_initiated'],
   investors: [],
 };
 
@@ -106,6 +108,7 @@ export function ExplorerView({ data, params, searchParams }: Props) {
           ['deposits', 'Deposits'],
           ['orders', 'Orders'],
           ['payouts', 'Payouts'],
+          ['maturities', 'Maturities'],
           ['investors', 'Investors'],
         ] as const).map(([table, label]) => (
           <Link

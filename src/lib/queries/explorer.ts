@@ -6,8 +6,8 @@ import { DEFAULT_THRESHOLDS } from './investors';
 import { Params, pgTs, productPredicates, utcBounds, type QueryFn } from './sql-filters';
 import { perInvestorCte, segmentCase } from './segment-sql';
 
-export type ExplorerTable = 'deposits' | 'orders' | 'payouts' | 'investors';
-export const EXPLORER_TABLES: ExplorerTable[] = ['deposits', 'orders', 'payouts', 'investors'];
+export type ExplorerTable = 'deposits' | 'orders' | 'payouts' | 'maturities' | 'investors';
+export const EXPLORER_TABLES: ExplorerTable[] = ['deposits', 'orders', 'payouts', 'maturities', 'investors'];
 export type CellKind = 'text' | 'int' | 'money' | 'date' | 'status';
 export type CellValue = string | number | null;
 
@@ -62,6 +62,7 @@ const INVESTOR_JOIN = `JOIN "user" u ON u.id = o."userId" AND u."deletedAt" IS N
 const ORDER_JOIN = `JOIN "order" o ON o.id = X."orderId" AND o."deletedAt" IS NULL`;
 const investorFirstDepJoin = `LEFT JOIN (SELECT o2."userId" AS user_id, MIN(d2."date") AS first_dep FROM deposits d2 JOIN "order" o2 ON o2.id = d2."orderId" WHERE d2."deletedAt" IS NULL AND o2."deletedAt" IS NULL AND d2.status::text = 'approved' GROUP BY o2."userId") fd ON fd.user_id = u.id`;
 const day = (col: string) => `to_char(${dhakaTs(col)}, 'YYYY-MM-DD')`;
+const maturityExpr = `COALESCE(sched.last_pay, o."investmentDate" + (split_part(p."productDuration"::text, ' ', 1)::int * interval '1 month'))`;
 const WHO = (key: string, sql: string, label: string): Col => ({ key, label, kind: 'text', sql });
 const investorSegmentJoin = (nowTs: string, recent: string, cooling: string) => `LEFT JOIN (
   WITH sched AS (
@@ -136,6 +137,46 @@ const TABLES: Record<ExplorerTable, TableDef> = {
       { key: 'amount', label: 'Amount', kind: 'money', sql: 'r.amount::float8' },
       WHO('method', `r."paymentMethod"::text`, 'Method'),
       { key: 'status', label: 'Status', kind: 'status', sql: 'r.status::text' },
+    ],
+  },
+  maturities: {
+    from: `"order" o
+JOIN products p ON p.id = o."productId"
+JOIN "user" u ON u.id = o."userId" AND u."deletedAt" IS NULL AND u."userType"::text = 'investor'
+LEFT JOIN (
+  SELECT "orderId", MAX("paymentDate") AS last_pay
+  FROM return_schedules
+  WHERE "deletedAt" IS NULL
+  GROUP BY 1
+) sched ON sched."orderId" = o.id
+LEFT JOIN (
+  SELECT "orderId",
+    CASE
+      WHEN BOOL_OR(status::text = 'completed') THEN 'completed'
+      WHEN BOOL_OR(status::text = 'initiated') THEN 'initiated'
+    END AS return_status,
+    COALESCE(SUM(amount), 0)::float8 AS return_amount,
+    MAX("date") AS last_return_date
+  FROM returns
+  WHERE "deletedAt" IS NULL
+  GROUP BY 1
+) ret ON ret."orderId" = o.id`,
+    where: [`o."deletedAt" IS NULL`, `o.status::text IN ('invested', 'closed')`],
+    dateCol: maturityExpr,
+    statusCol: `COALESCE(ret.return_status, 'not_initiated')`,
+    statuses: ['completed', 'initiated', 'not_initiated'],
+    search: (l, e) => `(u.name ILIKE ${l} OR u.phone ILIKE ${l} OR u.email ILIKE ${l} OR u.id::text = ${e} OR o.id::text = ${e})`,
+    defaultSort: 'maturity',
+    columns: [
+      { key: 'id', label: 'Order', kind: 'int', sql: 'o.id' },
+      { key: 'maturity', label: 'Maturity date', kind: 'date', sql: day(maturityExpr) },
+      WHO('investor', `COALESCE(u.name, '')`, 'Investor'),
+      WHO('phone', `COALESCE(u.phone, '')`, 'Phone'),
+      WHO('project', 'p.name', 'Project'),
+      { key: 'amount', label: 'Invested', kind: 'money', sql: 'o."totalAmount"::float8' },
+      { key: 'returnAmount', label: 'Return amount', kind: 'money', sql: 'COALESCE(ret.return_amount, 0)::float8' },
+      { key: 'returnDate', label: 'Return date', kind: 'date', sql: day('ret.last_return_date') },
+      { key: 'status', label: 'Return status', kind: 'status', sql: `COALESCE(ret.return_status, 'not_initiated')` },
     ],
   },
   investors: {

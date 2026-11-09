@@ -37,6 +37,12 @@ beforeAll(async () => {
       (4,'2026-01-10',5000,'cash','approved',3), (5,'2026-10-04',999,'cash','approved',5), (6,'2026-10-10 20:00',50,'cash','approved',1),
       (7,'2026-10-05',500,'cash','approved',6), (8,'2026-10-05',500,'cash','approved',7);
     INSERT INTO returns (id, "date", amount, status, "orderId") VALUES (1,'2026-10-07',300,'completed',3), (2,'2026-10-08',100,'initiated',1);
+    INSERT INTO "order" (id, status, quantity, "totalAmount", "investmentDate", "createdAt", "userId", "productId") VALUES
+      (8,'invested',1,8000,'2026-05-02','2026-05-02',1,1);
+    INSERT INTO return_schedules (id, "orderId", "paymentDate") VALUES
+      (1,1,'2026-11-02'), (2,2,'2026-11-02');
+    INSERT INTO returns (id, "date", amount, status, "orderId") VALUES
+      (3,'2026-11-03',250,'completed',2);
   `);
 });
 
@@ -99,11 +105,29 @@ describe('loadExplorer', () => {
     expect(o.rows[0]).toMatchObject({ tenure: 12, quantity: 2, status: 'invested' });
     expect((await loadExplorer(q, params('t=payouts'))).rows.map((x) => [x.id, x.status])).toEqual([[2, 'initiated'], [1, 'completed']]);
     const inv = await loadExplorer(q, params('t=investors&sort=lifetime'));
-    expect(inv.rows.map((x) => [x.id, x.lifetime, x.investments])).toEqual([[2, 20000, 1], [1, 10050, 1]]);
+    expect(inv.rows.map((x) => [x.id, x.lifetime, x.investments])).toEqual([[2, 20000, 1], [1, 10050, 2]]);
     expect(inv.columns.at(-1)).toEqual({ key: 'segment', label: 'Segment', kind: 'text' });
     expect((await loadExplorer(q, params('t=orders&prod=2'))).rows.map((row) => row.id)).toEqual([2]);
     expect((await loadExplorer(q, params('t=orders&os=cancelled'))).total).toBe(3);
     expect((await loadExplorer(q, params('t=payouts&prod=2'))).total).toBe(0);
+  });
+  it('maturities: filters by the selected Dhaka maturity date and summarizes return status', async () => {
+    const maturityParams = (from: string, to: string, extra = '') =>
+      parseExplorerParams(new URLSearchParams(`t=maturities&p=custom&from=${from}&to=${to}&cmp=none&${extra}`), TODAY);
+    const r = await loadExplorer(q, maturityParams('2026-11-02', '2026-11-02'));
+    expect(r.total).toBe(3);
+    expect(r.rows.map((row) => [row.id, row.maturity, row.status])).toEqual([
+      [8, '2026-11-02', 'not_initiated'],
+      [2, '2026-11-02', 'completed'],
+      [1, '2026-11-02', 'initiated'],
+    ]);
+    expect(r.rows.find((row) => row.id === 1)).toMatchObject({ returnAmount: 100, returnDate: '2026-10-08' });
+    expect(r.rows.find((row) => row.id === 2)).toMatchObject({ returnAmount: 250, returnDate: '2026-11-03' });
+    expect(r.columns.map((column) => column.key)).toEqual([
+      'id', 'maturity', 'investor', 'phone', 'project', 'amount', 'returnAmount', 'returnDate', 'status',
+    ]);
+    expect((await loadExplorer(q, maturityParams('2026-11-02', '2026-11-02', 'st=not_initiated'))).rows.map((row) => row.id)).toEqual([8]);
+    expect((await loadExplorer(q, maturityParams('2026-11-03', '2026-11-03'))).total).toBe(0);
   });
   it('matches each Explorer investor segment total to the Investors segment counts', async () => {
     await db.exec(`
