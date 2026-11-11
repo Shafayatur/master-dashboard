@@ -1,7 +1,11 @@
+'use client';
+
+import { useState } from 'react';
 import { formatMoney, type MoneyUnit } from '@/lib/format/money';
 import type { TargetsOverview } from '@/lib/queries/targets';
 import { CHART_COLORS } from '@/components/charts/chart-colors';
 import { ChartCard } from '@/components/charts/chart-card';
+import { cn } from '@/components/ui/cn';
 import { BarChart } from './bar-chart';
 import { PageTools } from './page-tools';
 import { TargetForm } from './target-form';
@@ -14,15 +18,18 @@ function formatMonth(month: string): string {
 }
 
 export function TargetsView({ data, unit }: { data: TargetsOverview; unit: MoneyUnit }) {
+  const [excludeReinvest, setExcludeReinvest] = useState(false);
+  const [monthsWindow, setMonthsWindow] = useState<6 | 12>(12);
   const chartRows = data.rows
     .filter((row) => !row.isFuture)
     .slice(0, 12)
-    .reverse();
+    .reverse()
+    .slice(-monthsWindow);
   const chartItems = chartRows.map((row) => ({
     label: `${new Intl.DateTimeFormat('en', { month: 'short', timeZone: 'UTC' }).format(new Date(`${row.month}T00:00:00Z`))} '${row.month.slice(2, 4)}`,
     values: [
       { name: 'Target', color: CHART_COLORS[1] ?? '', value: row.target ?? 0 },
-      { name: 'Achieved', color: CHART_COLORS[0] ?? '', value: row.actual },
+      { name: 'Achieved', color: CHART_COLORS[0] ?? '', value: excludeReinvest ? row.actualFresh : row.actual },
     ],
   }));
 
@@ -36,7 +43,43 @@ export function TargetsView({ data, unit }: { data: TargetsOverview; unit: Money
         <PageTools generatedAt={data.generatedAt} unit={unit} />
       </div>
 
-      <ChartCard title="Target vs achieved" subtitle="Monthly investment value · last 12 months">
+      <ChartCard
+        title="Target vs achieved"
+        subtitle={`Monthly investment value · last ${monthsWindow} months${excludeReinvest ? ' · excluding reinvest' : ''}`}
+        action={
+          <div className="flex flex-wrap items-center gap-2 print:hidden">
+            <button
+              type="button"
+              aria-pressed={excludeReinvest}
+              onClick={() => setExcludeReinvest((excluded) => !excluded)}
+              className={cn(
+                'rounded-md border px-2 py-1.5 text-xs font-medium transition-colors',
+                excludeReinvest
+                  ? 'border-emerald-600/50 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200'
+                  : 'border-line text-muted hover:text-fg',
+              )}
+            >
+              Exclude reinvest
+            </button>
+            <div className="inline-flex overflow-hidden rounded-md border border-line" role="group" aria-label="Target chart month window">
+              {([6, 12] as const).map((months) => (
+                <button
+                  key={months}
+                  type="button"
+                  aria-pressed={monthsWindow === months}
+                  onClick={() => setMonthsWindow(months)}
+                  className={cn(
+                    'px-2 py-1.5 text-xs font-medium transition-colors',
+                    monthsWindow === months ? 'bg-ink text-ink-fg' : 'text-muted hover:text-fg',
+                  )}
+                >
+                  {months}M
+                </button>
+              ))}
+            </div>
+          </div>
+        }
+      >
         <BarChart items={chartItems} unit={unit} mode="grouped" />
       </ChartCard>
 
@@ -57,50 +100,54 @@ export function TargetsView({ data, unit }: { data: TargetsOverview; unit: Money
                 </tr>
               </thead>
               <tbody>
-                {data.rows.map((row) => (
-                  <tr key={row.month} className="border-b border-line last:border-0">
-                    <th scope="row" className="py-3 pr-4 font-medium">
-                      <span className="whitespace-nowrap">{formatMonth(row.month)}</span>
-                      {row.isCurrent && (
-                        <span className="ml-2 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
-                          current
-                        </span>
-                      )}
-                      {row.isFuture && (
-                        <span className="ml-2 rounded-full bg-line px-2 py-0.5 text-[10px] font-medium text-muted">
-                          upcoming
-                        </span>
-                      )}
-                    </th>
-                    <td className="py-3 pr-4 whitespace-nowrap">
-                      {row.target === null ? <span className="text-muted">not set</span> : formatMoney(row.target, unit)}
-                    </td>
-                    <td className="py-3 pr-4 whitespace-nowrap">
-                      {row.isFuture ? '-' : formatMoney(row.actual, unit)}
-                    </td>
-                    <td className="py-3 pr-4">
-                      {row.pct === null ? (
-                        <span className="text-muted">-</span>
-                      ) : (
-                        <div className="flex items-center gap-2">
-                          <div className="h-2 w-20 overflow-hidden rounded-full bg-line">
-                            <div
-                              className={`h-full rounded-full ${row.pct >= 100 ? 'bg-emerald-500' : row.pct >= 60 ? 'bg-amber-500' : 'bg-rose-500'}`}
-                              style={{ width: `${Math.min(row.pct, 100)}%` }}
-                            />
+                {data.rows.map((row) => {
+                  const actual = excludeReinvest ? row.actualFresh : row.actual;
+                  const pct = excludeReinvest ? row.pctFresh : row.pct;
+                  return (
+                    <tr key={row.month} className="border-b border-line last:border-0">
+                      <th scope="row" className="py-3 pr-4 font-medium">
+                        <span className="whitespace-nowrap">{formatMonth(row.month)}</span>
+                        {row.isCurrent && (
+                          <span className="ml-2 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                            current
+                          </span>
+                        )}
+                        {row.isFuture && (
+                          <span className="ml-2 rounded-full bg-line px-2 py-0.5 text-[10px] font-medium text-muted">
+                            upcoming
+                          </span>
+                        )}
+                      </th>
+                      <td className="py-3 pr-4 whitespace-nowrap">
+                        {row.target === null ? <span className="text-muted">not set</span> : formatMoney(row.target, unit)}
+                      </td>
+                      <td className="py-3 pr-4 whitespace-nowrap">
+                        {row.isFuture ? '-' : formatMoney(actual, unit)}
+                      </td>
+                      <td className="py-3 pr-4">
+                        {pct === null ? (
+                          <span className="text-muted">-</span>
+                        ) : (
+                          <div className="flex items-center gap-2">
+                            <div className="h-2 w-20 overflow-hidden rounded-full bg-line">
+                              <div
+                                className={`h-full rounded-full ${pct >= 100 ? 'bg-emerald-500' : pct >= 60 ? 'bg-amber-500' : 'bg-rose-500'}`}
+                                style={{ width: `${Math.min(pct, 100)}%` }}
+                              />
+                            </div>
+                            <span className="whitespace-nowrap">{Math.round(pct)}%</span>
                           </div>
-                          <span className="whitespace-nowrap">{Math.round(row.pct)}%</span>
-                        </div>
-                      )}
-                    </td>
-                    <td className="max-w-[16rem] truncate py-3 pr-4 text-muted" title={row.note ?? undefined}>
-                      {row.note ?? ''}
-                    </td>
-                    <td className="py-3">
-                      {row.target !== null && <TargetRemoveButton month={row.month} />}
-                    </td>
-                  </tr>
-                ))}
+                        )}
+                      </td>
+                      <td className="max-w-[16rem] truncate py-3 pr-4 text-muted" title={row.note ?? undefined}>
+                        {row.note ?? ''}
+                      </td>
+                      <td className="py-3">
+                        {row.target !== null && <TargetRemoveButton month={row.month} />}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

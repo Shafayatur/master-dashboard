@@ -1,9 +1,14 @@
+'use client';
+
+import Link from 'next/link';
+import { useState } from 'react';
 import { UserRound, UserRoundCheck, UserRoundMinus, UserRoundX } from 'lucide-react';
 import { AreaChart } from '@/components/charts/area-chart';
 import { CHART_COLORS } from '@/components/charts/chart-colors';
 import { ChartCard } from '@/components/charts/chart-card';
 import { DonutChart, DonutLegend } from '@/components/charts/donut-chart';
 import { KpiCard } from '@/components/charts/kpi-card';
+import { cn } from '@/components/ui/cn';
 import { buildInvestorInsights } from '@/lib/dashboard/investor-insights';
 import { formatBucketLabel } from '@/lib/format/labels';
 import { investorSegmentHref } from '@/lib/drilldown';
@@ -24,6 +29,47 @@ interface Props {
 }
 
 const card = 'rounded-xl border border-line bg-surface p-4';
+type WindowMonths = 6 | 12;
+type TierMetric = 'investors' | 'value';
+
+const REGISTRATION_PERIODS = [
+  { preset: 'mtd', label: 'MTD' },
+  { preset: 'd30', label: '30D' },
+  { preset: 'd90', label: '90D' },
+  { preset: 'ytd', label: 'YTD' },
+] as const;
+
+function SegmentedButtons<T extends string | number>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: readonly { value: T; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div className="inline-flex overflow-hidden rounded-md border border-line" role="group" aria-label={label}>
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          aria-pressed={value === option.value}
+          onClick={() => onChange(option.value)}
+          className={cn(
+            'px-2 py-1.5 text-xs font-medium transition-colors',
+            value === option.value ? 'bg-ink text-ink-fg' : 'text-muted hover:text-fg',
+          )}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 const toneColor = {
   good: 'bg-emerald-500',
   warn: 'bg-amber-500',
@@ -45,6 +91,9 @@ function tierLabel(tier: TierRow, index: number, count: number, unit: MoneyUnit)
 }
 
 export function InvestorsView({ data, extras, unit, search, today }: Props) {
+  const [windowMonths, setWindowMonths] = useState<WindowMonths>(12);
+  const [tierMetric, setTierMetric] = useState<TierMetric>('investors');
+  const registrationPreset = new URLSearchParams(search).get('p') ?? 'mtd';
   const insights = buildInvestorInsights(data, unit);
   const segments = data.segments.map((segment) => ({
     key: segment.key,
@@ -60,10 +109,16 @@ export function InvestorsView({ data, extras, unit, search, today }: Props) {
   const inactive = segmentByKey.get('inactive')?.investors ?? 0;
   const tierItems = data.tiers.map((tier, index) => ({
     label: tierLabel(tier, index, data.tiers.length, unit),
-    values: [{ value: tier.investors, color: CHART_COLORS[1] ?? '', name: 'Investors' }],
+    values: [{
+      value: tierMetric === 'investors' ? tier.investors : tier.value,
+      color: CHART_COLORS[1] ?? '',
+      name: tierMetric === 'investors' ? 'Investors' : 'Lifetime value',
+    }],
   }));
   const paretoNote = `Top 10 investors hold ${data.concentration.top10Share.toFixed(0)}% of lifetime investment; the top 20% hold ${data.concentration.top20PctShare.toFixed(0)}%.`;
-  const registrationLabels = extras.registrationsVsFirst.map((row) => row.month);
+  const registrationsVsFirst = extras.registrationsVsFirst.slice(-windowMonths);
+  const cohorts = data.cohorts.slice(-windowMonths);
+  const registrationLabels = registrationsVsFirst.map((row) => row.month);
   const registrationPoints = extras.registrationsOverTime.points;
   const periodRegistered = registrationPoints.reduce((sum, point) => sum + point.registered, 0);
   const periodInvested = registrationPoints.reduce((sum, point) => sum + point.invested, 0);
@@ -126,8 +181,22 @@ export function InvestorsView({ data, extras, unit, search, today }: Props) {
               <p className="mt-2 text-xs text-muted">Average lifetime value · share of investors</p>
             </ChartCard>
 
-            <ChartCard title="Investors by lifetime value" subtitle={paretoNote}>
-              <BarChart items={tierItems} unit={unit} kind="int" height={250} />
+            <ChartCard
+              title="Investors by lifetime value"
+              subtitle={paretoNote}
+              action={
+                <SegmentedButtons
+                  label="Lifetime value tier metric"
+                  options={[
+                    { value: 'investors', label: 'Count' },
+                    { value: 'value', label: 'Value' },
+                  ]}
+                  value={tierMetric}
+                  onChange={setTierMetric}
+                />
+              }
+            >
+              <BarChart items={tierItems} unit={unit} kind={tierMetric === 'investors' ? 'int' : 'money'} height={250} />
             </ChartCard>
 
             <section className={card}>
@@ -190,7 +259,27 @@ export function InvestorsView({ data, extras, unit, search, today }: Props) {
             </section>
           </div>
 
-          <ChartCard title="New registrations" subtitle={registrationNote}>
+          <ChartCard
+            title="New registrations"
+            subtitle={registrationNote}
+            action={
+              <nav className="flex gap-1 rounded-md border border-line p-0.5 print:hidden" aria-label="New registrations period">
+                {REGISTRATION_PERIODS.map(({ preset, label }) => (
+                  <Link
+                    key={preset}
+                    href={`/investors?p=${preset}`}
+                    aria-current={registrationPreset === preset ? 'page' : undefined}
+                    className={cn(
+                      'rounded px-2 py-1 text-xs font-medium transition-colors',
+                      registrationPreset === preset ? 'bg-ink text-ink-fg' : 'text-muted hover:text-fg',
+                    )}
+                  >
+                    {label}
+                  </Link>
+                ))}
+              </nav>
+            }
+          >
             <div className="mb-2 flex flex-wrap gap-4 text-xs text-muted">
               <span className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-emerald-500" aria-hidden />
@@ -204,7 +293,20 @@ export function InvestorsView({ data, extras, unit, search, today }: Props) {
             <BarChart items={registrationItems} unit={unit} kind="int" height={260} />
           </ChartCard>
 
-          <ChartCard title="Registrations vs first investments">
+          <ChartCard
+            title="Registrations vs first investments"
+            action={
+              <SegmentedButtons
+                label="Registration comparison months"
+                options={[
+                  { value: 6, label: '6M' },
+                  { value: 12, label: '12M' },
+                ]}
+                value={windowMonths}
+                onChange={setWindowMonths}
+              />
+            }
+          >
             <AreaChart
               labels={registrationLabels}
               bucket="month"
@@ -213,20 +315,20 @@ export function InvestorsView({ data, extras, unit, search, today }: Props) {
                 {
                   key: 'registrations',
                   label: 'Registrations',
-                  values: extras.registrationsVsFirst.map((row) => row.registered),
+                  values: registrationsVsFirst.map((row) => row.registered),
                   color: CHART_COLORS[0],
                 },
                 {
                   key: 'first-investments',
                   label: 'First investments',
-                  values: extras.registrationsVsFirst.map((row) => row.firstInvestments),
+                  values: registrationsVsFirst.map((row) => row.firstInvestments),
                   color: CHART_COLORS[1],
                 },
               ]}
             />
           </ChartCard>
 
-          <CohortTable cohorts={data.cohorts} medianDaysToFirst={data.medianDaysToFirst} />
+          <CohortTable cohorts={cohorts} medianDaysToFirst={data.medianDaysToFirst} />
         </div>
 
         <aside className={card}>

@@ -23,10 +23,10 @@ beforeAll(async () => {
     INSERT INTO "user" (id, "createdAt", "userType") VALUES (1,'2026-01-01','investor'), (2,'2026-01-01','internal-staff');
     INSERT INTO products (id, name, "productDuration") VALUES (1, 'A', '6 Months');
     INSERT INTO "order" (id, status, "userId", "productId") VALUES (1,'invested',1,1), (2,'invested',2,1);
-    INSERT INTO deposits (id, "date", amount, status, "orderId") VALUES
-      (1,'2026-09-05',30000,'approved',1), (2,'2026-09-20',3000,'approved',1), (3,'2026-09-21',9999,'pending',1),
-      (4,'2026-10-03',20000,'approved',1), (5,'2026-10-04',77777,'approved',2),
-      (6,'2026-09-30 19:00',1000,'approved',1);
+    INSERT INTO deposits (id, "date", amount, status, "orderId", "paymentMethod") VALUES
+      (1,'2026-09-05',30000,'approved',1,'bank_deposit'), (2,'2026-09-20',3000,'approved',1,'reinvest'), (3,'2026-09-21',9999,'pending',1,'cash'),
+      (4,'2026-10-03',20000,'approved',1,'bank_deposit'), (5,'2026-10-04',77777,'approved',2,'bank_deposit'),
+      (6,'2026-09-30 19:00',1000,'approved',1,'bank_deposit');
   `);
   cfg = new PGlite();
   await cfg.exec(readFileSync(path.join(process.cwd(), 'db/config/001_init.sql'), 'utf8'));
@@ -48,12 +48,13 @@ describe('targets', () => {
     await upsertTarget(cq, '2026-12-01', 99000, 'Year end');
     const o = await loadTargetsOverview(q, cq, TODAY, NOW);
     expect(o.rows).toHaveLength(14);
-    expect(o.rows[0]).toMatchObject({ month: '2026-12-01', target: 99000, note: 'Year end', actual: 0, isFuture: true });
+    expect(o.rows[0]).toMatchObject({ month: '2026-12-01', target: 99000, note: 'Year end', actual: 0, actualFresh: 0, isFuture: true });
     const oct = o.rows.find((r) => r.month === '2026-10-01');
-    expect(oct).toMatchObject({ target: null, pct: null, isCurrent: true, actual: 21000 }); // 20000 + 1000 (Dhaka 1 Oct); staff deposit and pending excluded
+    expect(oct).toMatchObject({ target: null, pct: null, isCurrent: true, actual: 21000, actualFresh: 21000 }); // 20000 + 1000 (Dhaka 1 Oct); staff deposit and pending excluded
     const sep = o.rows.find((r) => r.month === '2026-09-01');
-    expect(sep).toMatchObject({ target: 50000, actual: 33000 });
+    expect(sep).toMatchObject({ target: 50000, actual: 33000, actualFresh: 30000 });
     expect(sep?.pct).toBeCloseTo(66);
+    expect(sep?.pctFresh).toBeCloseTo(60);
     expect(o.rows.at(-1)?.month).toBe('2025-11-01');
     expect(JSON.parse(JSON.stringify(o))).toEqual(o);
   });

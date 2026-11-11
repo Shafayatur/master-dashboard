@@ -234,37 +234,32 @@ function MoreFilters({ filters, update, showInvestorSegment }: { filters: Filter
 }
 
 export function FilterBar() {
-  const { filters, update, reset, pending } = useFilters();
   const pathname = usePathname();
+  const { filters, update, reset, pending } = useFilters();
   const searchParams = useSearchParams();
   const table = searchParams.get('t');
 
-  if (pathname === '/actions' || pathname === '/targets' || pathname === '/design' || pathname.startsWith('/investors/')) {
-    return null;
-  }
-
-  const dateOnly = pathname === '/investors' || pathname === '/money-flow';
   const explorer = pathname === '/explorer';
+  if (pathname !== '/' && pathname !== '/sales' && pathname !== '/projects' && !explorer) return null;
+
   const explorerDeposits = explorer && (table === null || table === 'deposits');
-  const showInvestorSegment = explorer && table === 'investors';
+  const showInvestorSegment = explorer;
   const dirtyMoreFilters = moreFilterCount(filters, showInvestorSegment) > 0;
-  const dirty = dateOnly
-    ? filters.preset !== 'mtd'
-    : explorer
-      ? filters.preset !== 'mtd' || (explorerDeposits && filters.paymentMethod.length > 0) || dirtyMoreFilters
-      : filters.preset !== 'mtd' ||
-        filters.compare !== DEFAULT_COMPARE ||
-        !(filters.depositStatus.length === 1 && filters.depositStatus[0] === 'approved') ||
-        filters.orderStatus.length > 0 ||
-        filters.paymentMethod.length > 0 ||
-        filters.excludeReinvest ||
-        dirtyMoreFilters;
+  const dirty = explorer
+    ? filters.preset !== 'mtd' || (explorerDeposits && filters.paymentMethod.length > 0) || dirtyMoreFilters
+    : filters.preset !== 'mtd' ||
+      filters.compare !== DEFAULT_COMPARE ||
+      !(filters.depositStatus.length === 1 && filters.depositStatus[0] === 'approved') ||
+      filters.orderStatus.length > 0 ||
+      filters.paymentMethod.length > 0 ||
+      filters.excludeReinvest ||
+      dirtyMoreFilters;
 
   return (
     <div className="relative z-20 border-b border-line bg-surface/90 px-4 py-3 backdrop-blur sm:px-6 print:hidden" aria-busy={pending}>
       <div className="flex flex-wrap items-center gap-2">
         <DatePicker key={`${filters.range.from}_${filters.range.to}`} filters={filters} update={update} />
-        {!dateOnly && !explorer && (
+        {!explorer && (
           <>
             <label className={cn(triggerClass, 'relative gap-1.5 pr-2')}>
               <span className="text-muted">vs</span>
@@ -286,10 +281,10 @@ export function FilterBar() {
             <MultiSelect title="Orders" none="All" options={ORDER_STATUSES} labels={LABELS.order} selected={filters.orderStatus} onChange={(orderStatus) => update({ orderStatus })} />
           </>
         )}
-        {!dateOnly && (!explorer || explorerDeposits) && (
+        {(!explorer || explorerDeposits) && (
           <MultiSelect title="Payment" none="All" options={PAYMENT_METHODS} labels={LABELS.payment} selected={filters.paymentMethod} onChange={(paymentMethod) => update({ paymentMethod })} />
         )}
-        {!dateOnly && !explorer && (
+        {!explorer && (
           <button
             type="button"
             role="switch"
@@ -300,7 +295,7 @@ export function FilterBar() {
             Exclude reinvest
           </button>
         )}
-        {!dateOnly && <MoreFilters filters={filters} update={update} showInvestorSegment={showInvestorSegment} />}
+        <MoreFilters filters={filters} update={update} showInvestorSegment={showInvestorSegment} />
         {dirty && (
           <button type="button" onClick={reset} className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2 text-sm text-muted hover:text-fg">
             <RotateCcw className="h-3.5 w-3.5" aria-hidden />
@@ -308,7 +303,7 @@ export function FilterBar() {
           </button>
         )}
       </div>
-      {!dateOnly && !explorer && filters.compareRange && <p className="mt-2 text-xs text-muted">Compared with {formatRange(filters.compareRange)}</p>}
+      {!explorer && filters.compareRange && <p className="mt-2 text-xs text-muted">Compared with {formatRange(filters.compareRange)}</p>}
     </div>
   );
 }

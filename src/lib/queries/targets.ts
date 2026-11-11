@@ -10,8 +10,12 @@ export interface TargetRow {
   note: string | null;
   /** Approved deposits in that Dhaka month (all products, investors only). 0 for future months. */
   actual: number;
+  /** Approved deposits excluding reinvestment in that Dhaka month. 0 for future months. */
+  actualFresh: number;
   /** Achievement %, null when no target is set. */
   pct: number | null;
+  /** Fresh-cash achievement %, null when no target is set. */
+  pctFresh: number | null;
   isCurrent: boolean;
   isFuture: boolean;
 }
@@ -49,7 +53,9 @@ export async function loadTargetsOverview(q: QueryFn, cq: QueryFn, today: string
   const [actualRows, targetRows] = await Promise.all([
     q(
       `WITH ${b.cte}
-SELECT to_char(date_trunc('month', dep_date + interval '6 hours'), 'YYYY-MM-DD') AS month, SUM(amount)::float8 AS actual
+SELECT to_char(date_trunc('month', dep_date + interval '6 hours'), 'YYYY-MM-DD') AS month,
+  SUM(amount)::float8 AS actual,
+  COALESCE(SUM(amount) FILTER (WHERE payment_method <> 'reinvest'), 0)::float8 AS actual_fresh
 FROM base GROUP BY 1`,
       p.values,
     ),
@@ -59,7 +65,10 @@ FROM monthly_targets WHERE month >= $1::date AND month <= $2::date`,
       [first, last],
     ),
   ]);
-  const actual = new Map(actualRows.map((r) => [String(r.month), num(r.actual)]));
+  const actual = new Map(actualRows.map((r) => [String(r.month), {
+    all: num(r.actual),
+    fresh: num(r.actual_fresh),
+  }]));
   const target = new Map(targetRows.map((r) => [String(r.month), r]));
 
   const rows: TargetRow[] = [];
@@ -67,13 +76,17 @@ FROM monthly_targets WHERE month >= $1::date AND month <= $2::date`,
     const month = addMonths(current, i);
     const t = target.get(month);
     const tv = t ? num(t.target) : null;
-    const a = actual.get(month) ?? 0;
+    const monthActual = actual.get(month);
+    const a = monthActual?.all ?? 0;
+    const fresh = monthActual?.fresh ?? 0;
     rows.push({
       month,
       target: tv,
       note: t && t.note ? String(t.note) : null,
       actual: a,
+      actualFresh: fresh,
       pct: tv && tv > 0 ? (a / tv) * 100 : null,
+      pctFresh: tv && tv > 0 ? (fresh / tv) * 100 : null,
       isCurrent: i === 0,
       isFuture: i > 0,
     });

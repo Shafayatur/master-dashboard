@@ -1,9 +1,14 @@
+'use client';
+
+import Link from 'next/link';
+import { useState } from 'react';
 import { Banknote, CalendarClock, CalendarDays, Hourglass, Send, Wallet } from 'lucide-react';
 import { AreaChart } from '@/components/charts/area-chart';
 import { CHART_COLORS } from '@/components/charts/chart-colors';
 import { ChartCard } from '@/components/charts/chart-card';
 import { DonutChart, DonutLegend } from '@/components/charts/donut-chart';
 import { KpiCard } from '@/components/charts/kpi-card';
+import { cn } from '@/components/ui/cn';
 import { buildMoneyFlowInsights } from '@/lib/dashboard/money-flow-insights';
 import { formatRange } from '@/lib/filters/format';
 import { serializeFilters, type Filters } from '@/lib/filters/schema';
@@ -21,6 +26,58 @@ interface Props {
 }
 
 const SHOW_OVERDUE_UI = true;
+type CashFlowMonths = 6 | 12 | 24 | 'all';
+type HorizonWeeks = 4 | 8 | 12;
+
+const PERIODS = [
+  { preset: 'mtd', label: 'MTD' },
+  { preset: 'lastMonth', label: 'Last month' },
+  { preset: 'd30', label: 'Last 30 days' },
+  { preset: 'd90', label: 'Last 90 days' },
+  { preset: 'ytd', label: 'YTD' },
+] as const;
+const CASH_FLOW_MONTH_OPTIONS = [
+  { value: 6, label: '6M' },
+  { value: 12, label: '12M' },
+  { value: 24, label: '24M' },
+  { value: 'all', label: 'All' },
+] as const;
+const HORIZON_OPTIONS = [
+  { value: 4, label: '4W' },
+  { value: 8, label: '8W' },
+  { value: 12, label: '12W' },
+] as const;
+
+function SegmentedButtons<T extends string | number>({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: readonly { value: T; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div className="inline-flex overflow-hidden rounded-md border border-line" role="group" aria-label={label}>
+      {options.map((option) => (
+        <button
+          key={option.value}
+          type="button"
+          aria-pressed={value === option.value}
+          onClick={() => onChange(option.value)}
+          className={cn(
+            'px-2 py-1.5 text-xs font-medium transition-colors',
+            value === option.value ? 'bg-ink text-ink-fg' : 'text-muted hover:text-fg',
+          )}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
 
 const toneColor = {
   good: 'bg-emerald-500',
@@ -38,6 +95,9 @@ function payoutMonthLabel(ymd: string): string {
 }
 
 export function MoneyFlowView({ data, unit, filters }: Props) {
+  const [cashFlowMonths, setCashFlowMonths] = useState<CashFlowMonths>(12);
+  const [excludeReinvest, setExcludeReinvest] = useState(false);
+  const [horizonWeeks, setHorizonWeeks] = useState<HorizonWeeks>(12);
   const insights = buildMoneyFlowInsights(data, unit).filter((i) => SHOW_OVERDUE_UI || !i.text.includes('past maturity'));
   const scheduleCoverage = data.schedule.coverage;
   const lowCoverage = scheduleCoverage.invested > 0 && scheduleCoverage.withSchedule / scheduleCoverage.invested < 0.7;
@@ -65,7 +125,18 @@ export function MoneyFlowView({ data, unit, filters }: Props) {
     { key: 'other', label: 'Other approved investment', value: otherApproved, color: CHART_COLORS[5] },
   ];
   const reinvestByKey = new Map(reinvestSlices.map((slice) => [slice.key, slice.value]));
-  const cashFlowTotals = data.cashFlowByMonth.reduce(
+  const visibleCashFlowByMonth = (cashFlowMonths === 'all'
+    ? data.cashFlowByMonth
+    : data.cashFlowByMonth.slice(-cashFlowMonths)
+  ).map((month) => {
+    const moneyIn = excludeReinvest ? month.moneyIn - month.reinvest : month.moneyIn;
+    return {
+      ...month,
+      moneyIn,
+      net: moneyIn - month.moneyOut,
+    };
+  });
+  const cashFlowTotals = visibleCashFlowByMonth.reduce(
     (totals, month) => ({
       moneyIn: totals.moneyIn + month.moneyIn,
       reinvest: totals.reinvest + month.reinvest,
@@ -107,6 +178,21 @@ export function MoneyFlowView({ data, unit, filters }: Props) {
           </p>
         </div>
         <PageTools generatedAt={data.generatedAt} unit={unit} />
+        <nav className="flex flex-wrap gap-1 rounded-lg border border-line p-0.5 print:hidden" aria-label="Money Flow period">
+          {PERIODS.map(({ preset, label }) => (
+            <Link
+              key={preset}
+              href={`/money-flow?p=${preset}`}
+              aria-current={filters.preset === preset ? 'page' : undefined}
+              className={cn(
+                'rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+                filters.preset === preset ? 'bg-ink text-ink-fg' : 'text-muted hover:text-fg',
+              )}
+            >
+              {label}
+            </Link>
+          ))}
+        </nav>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
@@ -133,9 +219,28 @@ export function MoneyFlowView({ data, unit, filters }: Props) {
 
       <ChartCard
         title="Cash flow by month"
-        subtitle="All months since the first activity. Money in = approved deposits; money out = completed payouts. Ignores filters."
+        subtitle="Money in = approved deposits; money out = completed payouts. Ignores filters."
         action={
-          <div className="flex gap-2 print:hidden">
+          <div className="flex flex-wrap items-center justify-end gap-2 print:hidden">
+            <SegmentedButtons
+              label="Cash flow month range"
+              options={CASH_FLOW_MONTH_OPTIONS}
+              value={cashFlowMonths}
+              onChange={setCashFlowMonths}
+            />
+            <button
+              type="button"
+              aria-pressed={excludeReinvest}
+              onClick={() => setExcludeReinvest((excluded) => !excluded)}
+              className={cn(
+                'rounded-md border px-2 py-1.5 text-xs font-medium transition-colors',
+                excludeReinvest
+                  ? 'border-emerald-600/50 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200'
+                  : 'border-line text-muted hover:text-fg',
+              )}
+            >
+              Exclude reinvest
+            </button>
             <a
               href="/api/export/cash-flow?fmt=csv"
               download
@@ -154,20 +259,20 @@ export function MoneyFlowView({ data, unit, filters }: Props) {
         }
       >
         <AreaChart
-          labels={data.cashFlowByMonth.map((month) => month.month)}
+          labels={visibleCashFlowByMonth.map((month) => month.month)}
           bucket="month"
           unit={unit}
           series={[
             {
               key: 'money-in',
-              label: 'Money in',
-              values: data.cashFlowByMonth.map((month) => month.moneyIn),
+              label: excludeReinvest ? 'Money in (excluding reinvest)' : 'Money in',
+              values: visibleCashFlowByMonth.map((month) => month.moneyIn),
               color: CHART_COLORS[0],
             },
             {
               key: 'money-out',
               label: 'Money out',
-              values: data.cashFlowByMonth.map((month) => month.moneyOut),
+              values: visibleCashFlowByMonth.map((month) => month.moneyOut),
               color: CHART_COLORS[1],
             },
           ]}
@@ -177,14 +282,14 @@ export function MoneyFlowView({ data, unit, filters }: Props) {
             <thead className="sticky top-0 z-10 bg-surface text-left text-xs uppercase text-muted">
               <tr>
                 <th scope="col" className="py-2 pr-3 font-medium">Month</th>
-                <th scope="col" className="px-3 py-2 text-right font-medium">Money in</th>
-                <th scope="col" className="px-3 py-2 text-right font-medium">Of which reinvest</th>
+                <th scope="col" className="px-3 py-2 text-right font-medium">{excludeReinvest ? 'Money in (net of reinvest)' : 'Money in'}</th>
+                <th scope="col" className="px-3 py-2 text-right font-medium">{excludeReinvest ? 'Reinvest excluded' : 'Of which reinvest'}</th>
                 <th scope="col" className="px-3 py-2 text-right font-medium">Money out</th>
                 <th scope="col" className="px-3 py-2 text-right font-medium">Net</th>
               </tr>
             </thead>
             <tbody>
-              {[...data.cashFlowByMonth].reverse().map((month) => (
+              {[...visibleCashFlowByMonth].reverse().map((month) => (
                 <tr key={month.month} className="border-t border-line">
                   <th scope="row" className="py-2 pr-3 text-left font-normal">{payoutMonthLabel(month.month)}</th>
                   <td className="px-3 py-2 text-right tabular-nums">{formatMoney(month.moneyIn, unit)}</td>
@@ -222,10 +327,20 @@ export function MoneyFlowView({ data, unit, filters }: Props) {
           </p>
         </ChartCard>
 
-        <ChartCard title="Upcoming payouts (next 12 weeks)">
+        <ChartCard
+          title="Upcoming payouts"
+          action={
+            <SegmentedButtons
+              label="Upcoming payouts horizon"
+              options={HORIZON_OPTIONS}
+              value={horizonWeeks}
+              onChange={setHorizonWeeks}
+            />
+          }
+        >
           <BarChart
             unit={unit}
-            items={data.schedule.weeks.map((week) => ({
+            items={data.schedule.weeks.slice(0, horizonWeeks).map((week) => ({
               label: weekLabel(week.week),
               values: [
                 { name: 'Profit', color: CHART_COLORS[0] ?? '', value: week.profit },
@@ -240,7 +355,17 @@ export function MoneyFlowView({ data, unit, filters }: Props) {
         </ChartCard>
       </div>
 
-      <ChartCard title="Maturity calendar (principal reaching maturity)">
+      <ChartCard
+        title="Maturity calendar (principal reaching maturity)"
+        action={
+          <SegmentedButtons
+            label="Maturity calendar horizon"
+            options={HORIZON_OPTIONS}
+            value={horizonWeeks}
+            onChange={setHorizonWeeks}
+          />
+        }
+      >
         {SHOW_OVERDUE_UI && data.maturity.overdue.count > 0 && (
           <p className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm">
             {formatInt(data.maturity.overdue.count)} investments worth {formatMoney(data.maturity.overdue.amount, unit)} are more than 5 days past maturity but still marked invested.
@@ -248,7 +373,7 @@ export function MoneyFlowView({ data, unit, filters }: Props) {
         )}
         <BarChart
           unit={unit}
-          items={data.maturity.weeks.map((week) => ({
+          items={data.maturity.weeks.slice(0, horizonWeeks).map((week) => ({
             label: weekLabel(week.week),
             values: [{ name: 'Principal', color: CHART_COLORS[1] ?? '', value: week.principal }],
           }))}
