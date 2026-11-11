@@ -32,8 +32,8 @@ type HorizonWeeks = 4 | 8 | 12;
 const PERIODS = [
   { preset: 'mtd', label: 'MTD' },
   { preset: 'lastMonth', label: 'Last month' },
-  { preset: 'd30', label: 'Last 30 days' },
-  { preset: 'd90', label: 'Last 90 days' },
+  { preset: 'last30', label: 'Last 30 days' },
+  { preset: 'last90', label: 'Last 90 days' },
   { preset: 'ytd', label: 'YTD' },
 ] as const;
 const CASH_FLOW_MONTH_OPTIONS = [

@@ -34,8 +34,8 @@ type TierMetric = 'investors' | 'value';
 
 const REGISTRATION_PERIODS = [
   { preset: 'mtd', label: 'MTD' },
-  { preset: 'd30', label: '30D' },
-  { preset: 'd90', label: '90D' },
+  { preset: 'last30', label: '30D' },
+  { preset: 'last90', label: '90D' },
   { preset: 'ytd', label: 'YTD' },
 ] as const;
 
