@@ -1,7 +1,8 @@
 import 'server-only';
+import type { DateRange } from '@/lib/filters/dates';
 import { DEFAULT_THRESHOLDS } from './investors';
 import { STUCK_BOOKING_DAYS } from './overview';
-import { pgTs, type QueryFn, type Row } from './sql-filters';
+import { pgTs, utcBounds, type QueryFn, type Row } from './sql-filters';
 
 export type ListKey = 'maturing' | 'overdue' | 'cooling' | 'stuck' | 'pending';
 export const LIST_KEYS: ListKey[] = ['maturing', 'overdue', 'cooling', 'stuck', 'pending'];
@@ -97,7 +98,11 @@ const ORD = `sched AS (
   WHERE d."deletedAt" IS NULL AND d.status::text = 'approved' GROUP BY o."userId"
 ), cnt AS (SELECT "userId", COUNT(*)::int AS n FROM ord GROUP BY "userId")`;
 
-async function maturing(q: QueryFn, now: string, days: number, limit: number) {
+async function maturing(q: QueryFn, now: string, days: number, limit: number, maturityRange?: DateRange) {
+  const bounds = maturityRange ? utcBounds(maturityRange) : null;
+  const maturityClause = bounds
+    ? 'AND ord.maturity >= $2::timestamp AND ord.maturity < $3::timestamp'
+    : 'AND ord.maturity >= $1::timestamp - ($2::int * interval \'1 day\') AND ord.maturity < $1::timestamp + ($3::int * interval \'1 day\')';
   const rows = await q(
     `WITH ${ORD}
 SELECT ord.order_id, ${WHO}, ord.project, ord.amount::float8 AS amount,
@@ -108,10 +113,9 @@ SELECT ord.order_id, ${WHO}, ord.project, ord.amount::float8 AS amount,
 FROM ord JOIN "user" u ON u.id = ord."userId" AND ${INVESTOR}
 LEFT JOIN ltv l ON l."userId" = ord."userId" LEFT JOIN cnt c ON c."userId" = ord."userId"
 WHERE ord.status = 'invested'
-  AND ord.maturity >= $1::timestamp - ($2::int * interval '1 day')
-  AND ord.maturity < $1::timestamp + ($3::int * interval '1 day')
+  ${maturityClause}
 ORDER BY ord.maturity ASC LIMIT $4::int`,
-    [now, OVERDUE_DAYS, days, limit],
+    bounds ? [now, bounds.start, bounds.end, limit] : [now, OVERDUE_DAYS, days, limit],
   );
   return result(rows, (r): MaturingRow => ({
     ...contact(r), orderId: num(r.order_id), project: str(r.project), amount: num(r.amount), maturity: str(r.maturity),
@@ -201,10 +205,14 @@ ORDER BY d."date" ASC LIMIT $2::int`,
   }));
 }
 
-export async function loadActionLists(q: QueryFn, now: Date, opts: { maturingDays: number; limit: number }): Promise<ActionListsData> {
+export async function loadActionLists(
+  q: QueryFn,
+  now: Date,
+  opts: { maturingDays: number; limit: number; maturityRange?: DateRange },
+): Promise<ActionListsData> {
   const t = pgTs(now);
   const [m, o, c, s, p] = await Promise.all([
-    maturing(q, t, opts.maturingDays, opts.limit),
+    maturing(q, t, opts.maturingDays, opts.limit, opts.maturityRange),
     overdue(q, t, opts.limit),
     cooling(q, t, opts.limit),
     stuck(q, t, opts.limit),

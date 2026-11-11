@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { UserRound, UserRoundCheck, UserRoundMinus, UserRoundX } from 'lucide-react';
 import { AreaChart } from '@/components/charts/area-chart';
@@ -19,6 +20,7 @@ import { BarChart } from './bar-chart';
 import { CohortTable } from './cohort-table';
 import { CountUp } from './count-up';
 import { PageTools } from './page-tools';
+import { InlineDateRangePopover } from './inline-date-range-popover';
 
 interface Props {
   data: InvestorsData;
@@ -37,6 +39,7 @@ const REGISTRATION_PERIODS = [
   { preset: 'last30', label: '30D' },
   { preset: 'last90', label: '90D' },
   { preset: 'ytd', label: 'YTD' },
+  { preset: 'lifetime', label: 'Life time' },
 ] as const;
 
 function SegmentedButtons<T extends string | number>({
@@ -91,9 +94,13 @@ function tierLabel(tier: TierRow, index: number, count: number, unit: MoneyUnit)
 }
 
 export function InvestorsView({ data, extras, unit, search, today }: Props) {
+  const router = useRouter();
   const [windowMonths, setWindowMonths] = useState<WindowMonths>(12);
   const [tierMetric, setTierMetric] = useState<TierMetric>('investors');
-  const registrationPreset = new URLSearchParams(search).get('p') ?? 'mtd';
+  const registrationParams = new URLSearchParams(search);
+  const registrationPreset = registrationParams.get('p') ?? 'mtd';
+  const registrationFrom = registrationParams.get('from') ?? today;
+  const registrationTo = registrationParams.get('to') ?? today;
   const insights = buildInvestorInsights(data, unit);
   const segments = data.segments.map((segment) => ({
     key: segment.key,
@@ -263,7 +270,7 @@ export function InvestorsView({ data, extras, unit, search, today }: Props) {
             title="New registrations"
             subtitle={registrationNote}
             action={
-              <nav className="flex gap-1 rounded-md border border-line p-0.5 print:hidden" aria-label="New registrations period">
+              <div className="flex flex-wrap items-center gap-1 print:hidden">
                 {REGISTRATION_PERIODS.map(({ preset, label }) => (
                   <Link
                     key={preset}
@@ -277,7 +284,16 @@ export function InvestorsView({ data, extras, unit, search, today }: Props) {
                     {label}
                   </Link>
                 ))}
-              </nav>
+                <InlineDateRangePopover
+                  from={registrationFrom}
+                  to={registrationTo}
+                  isCustomActive={registrationPreset === 'custom'}
+                  onApply={(from, to) => {
+                    const params = new URLSearchParams({ p: 'custom', from, to });
+                    router.push(`/investors?${params.toString()}`);
+                  }}
+                />
+              </div>
             }
           >
             <div className="mb-2 flex flex-wrap gap-4 text-xs text-muted">

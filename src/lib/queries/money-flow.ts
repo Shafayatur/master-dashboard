@@ -7,7 +7,7 @@ import { Params, investorJoin, pgTs, salesBase, utcBounds, type QueryFn } from '
 
 export const REINVEST_WINDOW_DAYS = 30;
 export const OVERDUE_GRACE_DAYS = 5;
-const WEEKS = 12;
+const WEEKS = 52;
 
 export interface PayoutMonth {
   month: string;

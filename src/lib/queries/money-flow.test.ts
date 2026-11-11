@@ -62,7 +62,7 @@ describe('loadMoneyFlow', () => {
 
   it('scheduled payouts per week for running investments, with schedule coverage', async () => {
     const d = await loadMoneyFlow(q, SEPT, TODAY, NOW);
-    expect(d.schedule.weeks).toHaveLength(12);
+    expect(d.schedule.weeks).toHaveLength(52);
     expect(d.schedule.weeks[0]).toEqual({ week: '2026-10-12', count: 1, total: 500, profit: 500, principal: 0 });
     expect(d.schedule.weeks.find((w) => w.week === '2026-11-16')).toMatchObject({ total: 10500, principal: 10000 });
     expect(d.schedule.coverage).toEqual({ invested: 5, withSchedule: 1 }); // staff order excluded
@@ -86,6 +86,7 @@ describe('loadMoneyFlow', () => {
 
   it('maturity calendar: principal per week, excluding grace-window orders from overdue and calendar buckets', async () => {
     const d = await loadMoneyFlow(q, SEPT, TODAY, NOW);
+    expect(d.maturity.weeks).toHaveLength(52);
     expect(d.maturity.overdue).toEqual({ count: 1, amount: 8000 });
     const by = Object.fromEntries(d.maturity.weeks.filter((w) => w.count).map((w) => [w.week, w.principal]));
     expect(by).toEqual({ '2026-10-26': 12000, '2026-11-16': 10000, '2026-11-30': 20000 });

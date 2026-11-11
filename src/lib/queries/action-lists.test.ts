@@ -53,6 +53,14 @@ describe('loadActionLists', () => {
     const shortWindow = await loadActionLists(q, NOW, { maturingDays: 3, limit: 50 });
     expect(shortWindow.maturing.rows.map((r) => r.orderId)).toEqual([13]);
   });
+  it('maturing can be filtered by an explicit inclusive Dhaka date range', async () => {
+    const d = await loadActionLists(q, NOW, {
+      maturingDays: 14,
+      limit: 50,
+      maturityRange: { from: '2026-10-20', to: '2026-10-20' },
+    });
+    expect(d.maturing.rows.map((row) => [row.orderId, row.maturity])).toEqual([[1, '2026-10-20']]);
+  });
   it('cooling: last project matured 30-60 days ago, nothing running, richest first', async () => {
     const d = await loadActionLists(q, NOW, { maturingDays: 14, limit: 50 });
     expect(d.cooling.rows.map((r) => [r.userId, r.daysSince, r.lifetimeValue])).toEqual([[4, 43, 500000], [5, 34, 20000]]);

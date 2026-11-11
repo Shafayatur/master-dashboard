@@ -1,10 +1,16 @@
+'use client';
+
 import { AlertTriangle, CalendarClock, Clock, Hourglass, Snowflake } from 'lucide-react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { KpiCard } from '@/components/charts/kpi-card';
+import { formatRange } from '@/lib/filters/format';
+import { addDays, type DateRange } from '@/lib/filters/dates';
 import { formatInt, formatMoney, type MoneyUnit } from '@/lib/format/money';
 import type { ActionListsData, Contact } from '@/lib/queries/action-lists';
 import { ActionListCard } from './action-list-card';
 import { CountUp } from './count-up';
+import { InlineDateRangePopover } from './inline-date-range-popover';
 import { PageTools } from './page-tools';
 
 const windows = [7, 14, 30] as const;
@@ -30,7 +36,21 @@ function InvestorCell({ investor }: { investor: Contact }) {
   );
 }
 
-export function ActionsView({ data, unit }: { data: ActionListsData; unit: MoneyUnit }) {
+export function ActionsView({
+  data,
+  unit,
+  today,
+  maturityRange,
+}: {
+  data: ActionListsData;
+  unit: MoneyUnit;
+  today: string;
+  maturityRange: DateRange | null;
+}) {
+  const router = useRouter();
+  const maturityExportQuery = maturityRange
+    ? new URLSearchParams({ from: maturityRange.from, to: maturityRange.to }).toString()
+    : `days=${data.maturingDays}`;
   const kpis = [
     { label: 'Maturing soon', total: data.maturing.total, amount: data.maturing.amount, icon: CalendarClock, tone: 'blue' as const },
     ...(SHOW_OVERDUE_UI
@@ -83,17 +103,29 @@ export function ActionsView({ data, unit }: { data: ActionListsData; unit: Money
           ))}
         </div>
         <span className="text-xs text-muted">days</span>
+        {maturityRange && <span className="text-xs font-medium text-fg">{formatRange(maturityRange)}</span>}
+        <InlineDateRangePopover
+          from={maturityRange?.from ?? today}
+          to={maturityRange?.to ?? addDays(today, data.maturingDays)}
+          isCustomActive={maturityRange !== null}
+          onApply={(from, to) => {
+            const params = new URLSearchParams({ from, to });
+            router.push(`/actions?${params.toString()}`);
+          }}
+        />
       </div>
 
       <div className="grid gap-4 xl:grid-cols-2">
         <ActionListCard
-          title="Maturing soon"
-          description={`Active orders maturing within ${data.maturingDays} days, plus orders in the 5-day disbursement grace period.`}
+          title={maturityRange ? `Maturing ${formatRange(maturityRange)}` : 'Maturing soon'}
+          description={maturityRange
+            ? `Active orders with maturity dates from ${formatRange(maturityRange)}.`
+            : `Active orders maturing within ${data.maturingDays} days, plus orders in the 5-day disbursement grace period.`}
           total={data.maturing.total}
           amountLabel={`Invested amount: ${formatMoney(data.maturing.amount, unit)}`}
           shown={data.maturing.rows.length}
-          exportHref={`/api/export/actions?list=maturing&days=${data.maturingDays}`}
-          excelHref={`/api/export/actions?list=maturing&days=${data.maturingDays}&fmt=xlsx`}
+          exportHref={`/api/export/actions?list=maturing&${maturityExportQuery}`}
+          excelHref={`/api/export/actions?list=maturing&${maturityExportQuery}&fmt=xlsx`}
           headers={['Investor', 'Project', 'Amount', 'Matures', 'Days left', 'Lifetime value', 'Investments']}
           rows={data.maturing.rows.map((row) => [
             <InvestorCell key={`investor-${row.orderId}`} investor={row} />,

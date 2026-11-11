@@ -2,6 +2,7 @@ import { requireSessionApi } from '@/lib/auth/require-session';
 import { queryConfig } from '@/lib/db/config';
 import { querySource } from '@/lib/db/source';
 import { listExport } from '@/lib/export/action-list-csv';
+import { isValidYmd } from '@/lib/filters/dates';
 import { EXPORT_LIMIT, LIST_KEYS, loadActionLists, type ListKey } from '@/lib/queries/action-lists';
 import type { Row } from '@/lib/queries/sql-filters';
 import { todayDhaka } from '@/lib/time';
@@ -20,14 +21,24 @@ export async function GET(req: Request) {
   const list = url.searchParams.get('list') as ListKey | null;
   if (!list || !LIST_KEYS.includes(list)) return Response.json({ error: 'unknown list' }, { status: 400 });
   const days = Math.min(60, Math.max(1, Number.parseInt(url.searchParams.get('days') ?? '14', 10) || 14));
+  const from = url.searchParams.get('from');
+  const to = url.searchParams.get('to');
+  const hasRange = from !== null || to !== null;
+  let maturityRange: { from: string; to: string } | undefined;
+  if (hasRange) {
+    if (!from || !to || !isValidYmd(from) || !isValidYmd(to) || from > to) {
+      return Response.json({ error: 'invalid maturity date range' }, { status: 400 });
+    }
+    maturityRange = { from, to };
+  }
   const fmt = url.searchParams.get('fmt') === 'xlsx' ? 'xlsx' : 'csv';
 
-  const data = await loadActionLists((sql, params) => querySource<Row>(sql, params), new Date(), { maturingDays: days, limit: EXPORT_LIMIT });
+  const data = await loadActionLists((sql, params) => querySource<Row>(sql, params), new Date(), { maturingDays: days, limit: EXPORT_LIMIT, maturityRange });
   const out = listExport(list, data);
   const body = fmt === 'xlsx' ? new Uint8Array(await out.toXlsx()) : out.toCsv();
 
   try {
-    await queryConfig('INSERT INTO export_log (tab, format, filters, row_count) VALUES ($1, $2, $3::jsonb, $4)', ['actions', fmt, JSON.stringify({ list, days }), out.rowCount]);
+    await queryConfig('INSERT INTO export_log (tab, format, filters, row_count) VALUES ($1, $2, $3::jsonb, $4)', ['actions', fmt, JSON.stringify({ list, days, maturityRange }), out.rowCount]);
   } catch (e) {
     console.error('[export] could not write the export log:', (e as Error).message);
   }

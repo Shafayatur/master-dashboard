@@ -1,6 +1,7 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Banknote, CalendarClock, CalendarDays, Hourglass, Send, Wallet } from 'lucide-react';
 import { AreaChart } from '@/components/charts/area-chart';
@@ -9,12 +10,14 @@ import { ChartCard } from '@/components/charts/chart-card';
 import { KpiCard } from '@/components/charts/kpi-card';
 import { cn } from '@/components/ui/cn';
 import { buildMoneyFlowInsights } from '@/lib/dashboard/money-flow-insights';
+import { addDays } from '@/lib/filters/dates';
 import type { Filters } from '@/lib/filters/schema';
 import { formatInt, formatMoney, type MoneyUnit } from '@/lib/format/money';
 import type { MoneyFlowData } from '@/lib/queries/money-flow';
 import { BarChart } from './bar-chart';
 import { CountUp } from './count-up';
 import { PageTools } from './page-tools';
+import { InlineDateRangePopover } from './inline-date-range-popover';
 
 interface Props {
   data: MoneyFlowData;
@@ -26,12 +29,13 @@ const SHOW_OVERDUE_UI = true;
 type CashFlowMonths = 6 | 12 | 24 | 'all';
 type HorizonWeeks = 4 | 8 | 12;
 
-const PERIODS = [
+const MONEY_FLOW_PERIODS = [
   { preset: 'mtd', label: 'MTD' },
   { preset: 'lastMonth', label: 'Last month' },
   { preset: 'last30', label: 'Last 30 days' },
   { preset: 'last90', label: 'Last 90 days' },
   { preset: 'ytd', label: 'YTD' },
+  { preset: 'lifetime', label: 'Life time' },
 ] as const;
 const CASH_FLOW_MONTH_OPTIONS = [
   { value: 6, label: '6M' },
@@ -44,17 +48,20 @@ const HORIZON_OPTIONS = [
   { value: 8, label: '8W' },
   { value: 12, label: '12W' },
 ] as const;
+type CustomRange = { from: string; to: string } | null;
 
 function SegmentedButtons<T extends string | number>({
   label,
   options,
   value,
   onChange,
+  isSelected,
 }: {
   label: string;
   options: readonly { value: T; label: string }[];
   value: T;
   onChange: (value: T) => void;
+  isSelected?: (option: T) => boolean;
 }) {
   return (
     <div className="inline-flex overflow-hidden rounded-md border border-line" role="group" aria-label={label}>
@@ -62,11 +69,11 @@ function SegmentedButtons<T extends string | number>({
         <button
           key={option.value}
           type="button"
-          aria-pressed={value === option.value}
+          aria-pressed={isSelected ? isSelected(option.value) : value === option.value}
           onClick={() => onChange(option.value)}
           className={cn(
             'px-2 py-1.5 text-xs font-medium transition-colors',
-            value === option.value ? 'bg-ink text-ink-fg' : 'text-muted hover:text-fg',
+            (isSelected ? isSelected(option.value) : value === option.value) ? 'bg-ink text-ink-fg' : 'text-muted hover:text-fg',
           )}
         >
           {option.label}
@@ -92,9 +99,11 @@ function payoutMonthLabel(ymd: string): string {
 }
 
 export function MoneyFlowView({ data, unit, filters }: Props) {
+  const router = useRouter();
   const [cashFlowMonths, setCashFlowMonths] = useState<CashFlowMonths>(12);
   const [excludeReinvest, setExcludeReinvest] = useState(false);
   const [horizonWeeks, setHorizonWeeks] = useState<HorizonWeeks>(12);
+  const [customRange, setCustomRange] = useState<CustomRange>(null);
   const insights = buildMoneyFlowInsights(data, unit).filter((i) => SHOW_OVERDUE_UI || !i.text.includes('past maturity'));
   const scheduleCoverage = data.schedule.coverage;
   const lowCoverage = scheduleCoverage.invested > 0 && scheduleCoverage.withSchedule / scheduleCoverage.invested < 0.7;
@@ -120,6 +129,16 @@ export function MoneyFlowView({ data, unit, filters }: Props) {
     }),
     { moneyIn: 0, reinvest: 0, moneyOut: 0, net: 0 },
   );
+  const scheduleWeeks = customRange
+    ? data.schedule.weeks.filter((week) => week.week <= customRange.to && addDays(week.week, 6) >= customRange.from)
+    : data.schedule.weeks.slice(0, horizonWeeks);
+  const maturityWeeks = customRange
+    ? data.maturity.weeks.filter((week) => week.week <= customRange.to && addDays(week.week, 6) >= customRange.from)
+    : data.maturity.weeks.slice(0, horizonWeeks);
+  const firstScheduleWeek = data.schedule.weeks[0]?.week ?? data.range.from;
+  const lastScheduleWeek = data.schedule.weeks.at(-1)?.week ?? firstScheduleWeek;
+  const calendarFrom = customRange?.from ?? firstScheduleWeek;
+  const calendarTo = customRange?.to ?? addDays(lastScheduleWeek, 6);
   const kpis = [
     {
       label: 'Running investment value',
@@ -145,27 +164,39 @@ export function MoneyFlowView({ data, unit, filters }: Props) {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3 animate-rise">
+      <div className="relative z-40 flex flex-wrap items-end justify-between gap-3 animate-rise">
         <div>
           <h2 className="text-xl font-semibold tracking-tight">Money Flow</h2>
           <p className="mt-1 text-sm text-muted">Live cash flow, payouts and upcoming maturity schedule.</p>
         </div>
         <PageTools generatedAt={data.generatedAt} unit={unit} />
-        <nav className="flex flex-wrap gap-1 rounded-lg border border-line p-0.5 print:hidden" aria-label="Money Flow period">
-          {PERIODS.map(({ preset, label }) => (
-            <Link
-              key={preset}
-              href={`/money-flow?p=${preset}`}
-              aria-current={filters.preset === preset ? 'page' : undefined}
-              className={cn(
-                'rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
-                filters.preset === preset ? 'bg-ink text-ink-fg' : 'text-muted hover:text-fg',
-              )}
-            >
-              {label}
-            </Link>
-          ))}
-        </nav>
+        <div className="flex flex-wrap items-center gap-1 print:hidden">
+          <span className="mr-1 text-xs font-medium text-muted">Period:</span>
+          <nav className="flex flex-wrap gap-1 rounded-lg border border-line p-0.5" aria-label="Money Flow period">
+            {MONEY_FLOW_PERIODS.map(({ preset, label }) => (
+              <Link
+                key={preset}
+                href={`/money-flow?p=${preset}`}
+                aria-current={filters.preset === preset ? 'page' : undefined}
+                className={cn(
+                  'rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
+                  filters.preset === preset ? 'bg-ink text-ink-fg' : 'text-muted hover:text-fg',
+                )}
+              >
+                {label}
+              </Link>
+            ))}
+          </nav>
+          <InlineDateRangePopover
+            from={filters.range.from}
+            to={filters.range.to}
+            isCustomActive={filters.preset === 'custom'}
+            onApply={(from, to) => {
+              const params = new URLSearchParams({ p: 'custom', from, to });
+              router.push(`/money-flow?${params.toString()}`);
+            }}
+          />
+        </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
@@ -303,17 +334,29 @@ export function MoneyFlowView({ data, unit, filters }: Props) {
         <ChartCard
           title="Upcoming payouts"
           action={
-            <SegmentedButtons
-              label="Upcoming payouts horizon"
-              options={HORIZON_OPTIONS}
-              value={horizonWeeks}
-              onChange={setHorizonWeeks}
-            />
+            <div className="flex items-center gap-2">
+              <SegmentedButtons
+                label="Upcoming payouts horizon"
+                options={HORIZON_OPTIONS}
+                value={horizonWeeks}
+                onChange={(weeks) => {
+                  setCustomRange(null);
+                  setHorizonWeeks(weeks);
+                }}
+                isSelected={(weeks) => customRange === null && weeks === horizonWeeks}
+              />
+              <InlineDateRangePopover
+                from={calendarFrom}
+                to={calendarTo}
+                isCustomActive={customRange !== null}
+                onApply={(from, to) => setCustomRange({ from, to })}
+              />
+            </div>
           }
         >
           <BarChart
             unit={unit}
-            items={data.schedule.weeks.slice(0, horizonWeeks).map((week) => ({
+            items={scheduleWeeks.map((week) => ({
               label: weekLabel(week.week),
               values: [
                 { name: 'Profit', color: CHART_COLORS[0] ?? '', value: week.profit },
@@ -331,12 +374,24 @@ export function MoneyFlowView({ data, unit, filters }: Props) {
       <ChartCard
         title="Maturity calendar (principal reaching maturity)"
         action={
-          <SegmentedButtons
-            label="Maturity calendar horizon"
-            options={HORIZON_OPTIONS}
-            value={horizonWeeks}
-            onChange={setHorizonWeeks}
-          />
+          <div className="flex items-center gap-2">
+            <SegmentedButtons
+              label="Maturity calendar horizon"
+              options={HORIZON_OPTIONS}
+              value={horizonWeeks}
+              onChange={(weeks) => {
+                setCustomRange(null);
+                setHorizonWeeks(weeks);
+              }}
+              isSelected={(weeks) => customRange === null && weeks === horizonWeeks}
+            />
+            <InlineDateRangePopover
+              from={calendarFrom}
+              to={calendarTo}
+              isCustomActive={customRange !== null}
+              onApply={(from, to) => setCustomRange({ from, to })}
+            />
+          </div>
         }
       >
         {SHOW_OVERDUE_UI && data.maturity.overdue.count > 0 && (
@@ -346,7 +401,7 @@ export function MoneyFlowView({ data, unit, filters }: Props) {
         )}
         <BarChart
           unit={unit}
-          items={data.maturity.weeks.slice(0, horizonWeeks).map((week) => ({
+          items={maturityWeeks.map((week) => ({
             label: weekLabel(week.week),
             values: [{ name: 'Principal', color: CHART_COLORS[1] ?? '', value: week.principal }],
           }))}
