@@ -113,11 +113,12 @@ describe('loadMoneyFlow', () => {
 });
 
 describe('buildMoneyFlowInsights', () => {
-  it('flags overdue orders, thin schedule coverage and the reinvestment split', async () => {
+  it('summarizes maturity, schedule coverage and in-flight payouts without reinvestment insights', async () => {
     const texts = buildMoneyFlowInsights(await loadMoneyFlow(q, SEPT, TODAY, NOW), 'm').map((i) => i.text);
     expect(texts.some((t) => t.includes('past maturity but still marked invested'))).toBe(true);
     expect(texts.some((t) => t.includes('Only 20% of running investments have a payout schedule'))).toBe(true);
-    expect(texts.some((t) => t.includes('5.0K confirmed') && t.includes('4.0K estimated'))).toBe(true);
-    expect(texts.some((t) => t.includes('window is still open'))).toBe(true);
+    expect(texts.some((t) => t.includes('payouts worth') && t.includes('initiated but not completed'))).toBe(true);
+    expect(texts.some((t) => t.includes('invested again within 30 days'))).toBe(false);
+    expect(texts.some((t) => t.includes('confirmed (marked reinvest)'))).toBe(false);
   });
 });
