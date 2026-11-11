@@ -4,7 +4,15 @@ import { parseFilters, type Filters } from '@/lib/filters/schema';
 import type { Attention, Bucket, CommandCenterData } from '@/lib/dashboard/types';
 import { dhakaTs } from '@/lib/time';
 import { segments, type SegmentRow } from './investors';
-import { attention, bucketFor, bucketLabels, loadCommandCenter, type Deps, type SalesBucketValue } from './overview';
+import {
+  attention,
+  bucketFor,
+  bucketLabels,
+  loadCommandCenter,
+  type Deps,
+  type PeriodKpiCounts,
+  type SalesBucketValue,
+} from './overview';
 import { Params, investorJoin, pgTs, productPredicates, salesBase, utcBounds, type QueryFn } from './sql-filters';
 
 const num = (v: unknown): number => Number(v ?? 0);
@@ -111,7 +119,12 @@ WHERE ${INVESTOR} AND u."createdAt" >= ${p.add(start)}::timestamp AND u."created
 }
 
 /** Orders created per bucket, any status, with the product filters (same rule as the "tickets booked" KPI). */
-async function bookedBuckets(q: QueryFn, f: Filters, bucket: Bucket): Promise<Map<string, number>> {
+interface BookedBucket {
+  booked: number;
+  cancelled: number;
+}
+
+async function bookedBuckets(q: QueryFn, f: Filters, bucket: Bucket): Promise<Map<string, BookedBucket>> {
   const p = new Params();
   const { start, end } = utcBounds(f.range);
   const preds = [
@@ -121,12 +134,13 @@ async function bookedBuckets(q: QueryFn, f: Filters, bucket: Bucket): Promise<Ma
     ...productPredicates(f, p),
   ];
   const rows = await q(
-    `SELECT ${bucketOf(bucket, 'o."createdAt"')} AS label, COUNT(*)::int AS n
+    `SELECT ${bucketOf(bucket, 'o."createdAt"')} AS label, COUNT(*)::int AS booked,
+  COUNT(*) FILTER (WHERE o.status::text = 'cancelled')::int AS cancelled
 FROM "order" o JOIN products p ON p.id = o."productId" ${investorJoin('o."userId"')}
 WHERE ${preds.join(' AND ')} GROUP BY 1`,
     p.values,
   );
-  return new Map(rows.map((r) => [String(r.label), num(r.n)]));
+  return new Map(rows.map((r) => [String(r.label), { booked: num(r.booked), cancelled: num(r.cancelled) }]));
 }
 
 /** Completed payouts per bucket (returns.status 'completed', returns."date"), investors only, no product filters; excludeReinvest applies. */
@@ -335,20 +349,28 @@ export async function loadHome(
   const bucket = bucketFor(f.range);
   const labels = bucketLabels(f.range, bucket);
   const salesPromise = salesBuckets(q, f, bucket);
+  const regsPromise = registrationBuckets(q, f, bucket);
+  const bookedPromise = bookedBuckets(q, f, bucket);
   const snapshotPromise = cachedSnapshot ? Promise.resolve(cachedSnapshot) : loadHomeSnapshot(q, today, now);
   const salesSeriesPromise: Promise<Map<string, SalesBucketValue>> = salesPromise.then(
     (sales) => new Map([...sales].map(([label, row]) => [label, { value: row.sales, reinvest: row.reinvest }])),
   );
+  const currentPeriodCounts: Promise<PeriodKpiCounts> = Promise.all([regsPromise, bookedPromise]).then(([regs, booked]) => ({
+    registrations: [...regs.values()].reduce((sum, n) => sum + n, 0),
+    ticketsBooked: [...booked.values()].reduce((sum, bucket) => sum + bucket.booked, 0),
+    ticketsCancelled: [...booked.values()].reduce((sum, bucket) => sum + bucket.cancelled, 0),
+  }));
   const [snapshot, base, sales, fresh, regs, booked, paid, byProject, byCategory, payByCategory] = await Promise.all([
     snapshotPromise,
     loadCommandCenter(deps, f, today, now, {
       attention: snapshotPromise.then((snapshot) => snapshot.attention),
       currentSales: salesSeriesPromise,
+      currentPeriodCounts,
     }),
     salesPromise,
     newInvestorBuckets(q, f, bucket),
-    registrationBuckets(q, f, bucket),
-    bookedBuckets(q, f, bucket),
+    regsPromise,
+    bookedPromise,
     payoutBuckets(q, f, bucket),
     salesByProject(q, f),
     salesByCategory(q, f),
@@ -364,7 +386,7 @@ export async function loadHome(
       uniqueInvestors: perBucket.map((x) => x.investors),
       newInvestors: fill(labels, fresh, 0),
       registrations: fill(labels, regs, 0),
-      ticketsBooked: fill(labels, booked, 0),
+      ticketsBooked: fill(labels, new Map([...booked].map(([label, values]) => [label, values.booked])), 0),
       avgTicket: perBucket.map((x) => (x.tickets > 0 ? x.sales / x.tickets : 0)),
     },
     payouts: fill(labels, paid, 0),

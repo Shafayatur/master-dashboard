@@ -152,6 +152,21 @@ describe('loadHome: sparklines (daily, 1-10 Oct, aligned with series)', () => {
     expect(d.kpiSpark.ticketsBooked.reduce((s, n) => s + n, 0)).toBe(d.current.ticketsBooked);
   });
 
+  it('reuses bucket aggregates for current-period registration and booking KPIs', async () => {
+    const queries: string[] = [];
+    const trackedQuery: QueryFn = async (sql, params) => {
+      queries.push(sql);
+      return q(sql, params);
+    };
+    const result = await loadHome({ ...deps, q: trackedQuery }, filters(), TODAY, NOW);
+
+    expect(result.current.registrations).toBe(2);
+    expect(result.current.ticketsBooked).toBe(8);
+    expect(result.current.ticketsCancelled).toBe(1);
+    expect(queries.some((sql) => /SELECT COUNT\(\*\)::int AS n FROM "user" u/.test(sql))).toBe(false);
+    expect(queries.some((sql) => /SELECT COUNT\(\*\)::int AS booked, COUNT\(\*\) FILTER/.test(sql))).toBe(false);
+  });
+
   it('average ticket is sales / tickets per bucket, 0 where there are no tickets', () => {
     expect(d.kpiSpark.avgTicket).toEqual([1000, 4000, 10000, 0, 20500, 3900, 0, 1800, 2000, 1500]);
   });

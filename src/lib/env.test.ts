@@ -86,6 +86,9 @@ describe('config env is independent of the source env', () => {
       const config = buildPoolConfig('postgres://u:p@h:5432/d', { ssl: false, max: 1, appName: 't' });
       expect(config.statement_timeout).toBe(30_000);
       expect(config.query_timeout).toBe(32_000);
+      expect(config.idleTimeoutMillis).toBe(300_000);
+      expect(config.keepAlive).toBe(true);
+      expect(config.keepAliveInitialDelayMillis).toBe(10_000);
     });
   });
 });

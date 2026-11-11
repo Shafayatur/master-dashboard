@@ -73,7 +73,18 @@ WHERE ${preds.join(' AND ')}`,
   return { booked: num(row?.booked), cancelled: num(row?.cancelled) };
 }
 
-export async function periodKpis(q: QueryFn, f: Filters, r: DateRange): Promise<PeriodKpis> {
+export type PeriodKpiCounts = Pick<PeriodKpis, 'registrations' | 'ticketsBooked' | 'ticketsCancelled'>;
+
+export async function periodKpis(
+  q: QueryFn,
+  f: Filters,
+  r: DateRange,
+  counts?: PeriodKpiCounts | Promise<PeriodKpiCounts>,
+): Promise<PeriodKpis> {
+  if (counts) {
+    const [sales, precomputed] = await Promise.all([salesKpis(q, f, r), counts]);
+    return { ...sales, ...precomputed };
+  }
   const [sales, regs, booked] = await Promise.all([salesKpis(q, f, r), registrations(q, r), ticketsBooked(q, f, r)]);
   return { ...sales, registrations: regs, ticketsBooked: booked.booked, ticketsCancelled: booked.cancelled };
 }
@@ -221,12 +232,14 @@ export async function targetPacing(
 ): Promise<TargetPacing | null> {
   const refDay = f.range.to < today ? f.range.to : today;
   const month = startOfMonth(refDay);
-  const target = await getTarget(month);
-  if (target === null || target <= 0) return null;
-
   const p = new Params();
   const b = salesBase(f, { from: month, to: refDay }, p, true);
-  const [row] = await q(`WITH ${b.cte} SELECT COALESCE(SUM(amount), 0)::float8 AS sales FROM base`, p.values);
+  const [target, rows] = await Promise.all([
+    getTarget(month),
+    q(`WITH ${b.cte} SELECT COALESCE(SUM(amount), 0)::float8 AS sales FROM base`, p.values),
+  ]);
+  if (target === null || target <= 0) return null;
+  const [row] = rows;
   const actual = num(row?.sales);
 
   const daysInMonth = daysBetween(month, endOfMonth(refDay)) + 1;
@@ -259,11 +272,12 @@ export async function loadCommandCenter(
   snapshot?: {
     attention?: Attention | Promise<Attention>;
     currentSales?: Map<string, SalesBucketValue> | Promise<Map<string, SalesBucketValue>>;
+    currentPeriodCounts?: PeriodKpiCounts | Promise<PeriodKpiCounts>;
   },
 ): Promise<CommandCenterData> {
   const { q, getTarget } = deps;
   const [current, previous, trend, att, target] = await Promise.all([
-    periodKpis(q, f, f.range),
+    periodKpis(q, f, f.range, snapshot?.currentPeriodCounts),
     f.compareRange ? periodKpis(q, f, f.compareRange) : Promise.resolve(null),
     salesSeries(q, f, snapshot?.currentSales),
     snapshot?.attention ?? attention(q, now),

@@ -50,10 +50,11 @@ export function productPredicates(
   return out;
 }
 
-const FIRST_DEPOSIT = (materialized: boolean): string => `first_dep AS ${materialized ? 'MATERIALIZED ' : ''}(
+const FIRST_DEPOSIT = `first_dep AS MATERIALIZED (
   SELECT o2."userId", MIN(d2."date") AS first_dep
   FROM deposits d2 JOIN "order" o2 ON o2.id = d2."orderId"
   WHERE d2."deletedAt" IS NULL AND o2."deletedAt" IS NULL AND d2.status::text = 'approved'
+    AND o2."userId" IN (SELECT DISTINCT "userId" FROM raw_base)
   GROUP BY o2."userId"
 )`;
 
@@ -104,8 +105,9 @@ export function salesBase(f: Filters, r: DateRange, p: Params, plain = false, op
 
   let cte: string;
   if (!joinFirstDeposit) {
-    cte = `${FIRST_DEPOSIT(true)},
-base AS (${rawBase})`;
+    cte = `raw_base AS MATERIALIZED (${rawBase}),
+${FIRST_DEPOSIT},
+base AS (SELECT * FROM raw_base)`;
   } else if (!needsFirstDep) {
     cte = `base AS (${rawBase})`;
   } else {
@@ -114,8 +116,8 @@ base AS (${rawBase})`;
       : !plain && f.investorKind === 'old'
         ? `first_dep < ${s}`
         : '';
-    cte = `${FIRST_DEPOSIT(true)},
-raw_base AS MATERIALIZED (${rawBase}),
+    cte = `raw_base AS MATERIALIZED (${rawBase}),
+${FIRST_DEPOSIT},
 joined_base AS MATERIALIZED (
   SELECT rb.dep_id, rb.amount, rb.payment_method, rb."orderId", rb.dep_date, rb."userId", fd.first_dep
   FROM raw_base rb
