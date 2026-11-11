@@ -10,7 +10,7 @@ import { ChartCard } from '@/components/charts/chart-card';
 import { KpiCard } from '@/components/charts/kpi-card';
 import { cn } from '@/components/ui/cn';
 import { buildMoneyFlowInsights } from '@/lib/dashboard/money-flow-insights';
-import { addDays } from '@/lib/filters/dates';
+import { addDays, addMonths } from '@/lib/filters/dates';
 import type { Filters } from '@/lib/filters/schema';
 import { formatInt, formatMoney, type MoneyUnit } from '@/lib/format/money';
 import type { MoneyFlowData } from '@/lib/queries/money-flow';
@@ -107,11 +107,18 @@ export function MoneyFlowView({ data, unit, filters }: Props) {
   const insights = buildMoneyFlowInsights(data, unit).filter((i) => SHOW_OVERDUE_UI || !i.text.includes('past maturity'));
   const scheduleCoverage = data.schedule.coverage;
   const lowCoverage = scheduleCoverage.invested > 0 && scheduleCoverage.withSchedule / scheduleCoverage.invested < 0.7;
-  const conversion = data.conversion;
+  const payoutMonths = data.payoutsByMonth.filter(
+    (month) => month.month <= filters.range.to && addMonths(month.month, 1) > filters.range.from,
+  );
+  const paidOutAmount = payoutMonths.reduce((sum, month) => sum + month.completed.amount, 0);
+  const completedPayoutCount = payoutMonths.reduce((sum, month) => sum + month.completed.count, 0);
+  const periodCashFlow = data.cashFlowByMonth.filter(
+    (month) => month.month <= filters.range.to && addMonths(month.month, 1) > filters.range.from,
+  );
   const maturingInFourWeeks = data.maturity.weeks.slice(0, 4).reduce((sum, week) => sum + week.principal, 0);
   const visibleCashFlowByMonth = (cashFlowMonths === 'all'
-    ? data.cashFlowByMonth
-    : data.cashFlowByMonth.slice(-cashFlowMonths)
+    ? periodCashFlow
+    : periodCashFlow.slice(-cashFlowMonths)
   ).map((month) => {
     const moneyIn = excludeReinvest ? month.moneyIn - month.reinvest : month.moneyIn;
     return {
@@ -154,7 +161,7 @@ export function MoneyFlowView({ data, unit, filters }: Props) {
       icon: CalendarDays,
       tone: 'blue' as const,
     },
-    { label: 'Paid out in period', value: conversion.paidAmount, hint: `${formatInt(conversion.paidInvestors)} investors`, icon: Send, tone: 'emerald' as const },
+    { label: 'Paid out in period', value: paidOutAmount, hint: `${formatInt(completedPayoutCount)} completed payouts`, icon: Send, tone: 'emerald' as const },
     { label: 'In flight', value: data.inFlight.amount, hint: `${formatInt(data.inFlight.count)} payouts`, icon: Hourglass, tone: 'amber' as const },
     { label: 'Maturing in 4 weeks', value: maturingInFourWeeks, hint: 'principal due', icon: CalendarClock, tone: 'blue' as const },
     ...(SHOW_OVERDUE_UI
@@ -318,7 +325,7 @@ export function MoneyFlowView({ data, unit, filters }: Props) {
         <ChartCard title="Payouts by month">
           <BarChart
             unit={unit}
-            items={data.payoutsByMonth.map((month) => ({
+            items={payoutMonths.map((month) => ({
               label: payoutMonthLabel(month.month),
               values: [
                 { name: 'Completed', color: CHART_COLORS[0] ?? '', value: month.completed.amount },

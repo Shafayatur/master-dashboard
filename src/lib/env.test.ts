@@ -42,16 +42,16 @@ describe('source env', () => {
     });
     const { getSourceEnv } = await import('./env');
     expect(parse(getSourceEnv().url).port).toBe('5432');
-    expect(getSourceEnv().poolMax).toBe(6);
+    expect(getSourceEnv().poolMax).toBe(12);
   });
-  it('accepts a source pool size up to 20', async () => {
+  it('accepts a source pool size up to 30', async () => {
     Object.assign(process.env, {
       SOURCE_DB_HOST: 'h', SOURCE_DB_USER: 'u', SOURCE_DB_PASSWORD: 'p', SOURCE_DB_NAME: 'd',
-      SOURCE_DB_POOL_MAX: '20',
+      SOURCE_DB_POOL_MAX: '30',
     });
     const { getSourceEnv } = await import('./env');
-    expect(getSourceEnv().poolMax).toBe(20);
-    process.env.SOURCE_DB_POOL_MAX = '21';
+    expect(getSourceEnv().poolMax).toBe(30);
+    process.env.SOURCE_DB_POOL_MAX = '31';
     vi.resetModules();
     const { getSourceEnv: getInvalidSourceEnv } = await import('./env');
     expect(() => getInvalidSourceEnv()).toThrow(/SOURCE_DB_POOL_MAX/);

@@ -21,7 +21,7 @@ const sourceSchema = z.object({
   /** 'require' = TLS on (default). The source server uses a self-signed cert, so verification is off by default. */
   SOURCE_DB_SSL: z.preprocess(empty, z.enum(['require', 'disable']).default('require')),
   SOURCE_DB_SSL_REJECT_UNAUTHORIZED: z.preprocess(empty, z.enum(['true', 'false']).default('false')).transform((v) => v === 'true'),
-  SOURCE_DB_POOL_MAX: z.preprocess(empty, z.coerce.number().int().min(1).max(20).default(6)),
+  SOURCE_DB_POOL_MAX: z.preprocess(empty, z.coerce.number().int().min(1).max(30).default(12)),
 });
 
 export interface SourceEnv {

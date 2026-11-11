@@ -44,6 +44,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
               <Link
                 key={href}
                 href={qs ? `${href}?${qs}` : href}
+                prefetch={true}
                 onClick={onClose}
                 aria-current={active ? 'page' : undefined}
                 className={cn(

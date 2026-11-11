@@ -1,10 +1,10 @@
 import 'server-only';
 import { addMonths, startOfMonth } from '@/lib/filters/dates';
-import type { Filters } from '@/lib/filters/schema';
-import type { Bucket, CommandCenterData } from '@/lib/dashboard/types';
+import { parseFilters, type Filters } from '@/lib/filters/schema';
+import type { Attention, Bucket, CommandCenterData } from '@/lib/dashboard/types';
 import { dhakaTs } from '@/lib/time';
 import { segments, type SegmentRow } from './investors';
-import { bucketFor, bucketLabels, loadCommandCenter, type Deps } from './overview';
+import { attention, bucketFor, bucketLabels, loadCommandCenter, type Deps, type SalesBucketValue } from './overview';
 import { Params, investorJoin, pgTs, productPredicates, salesBase, utcBounds, type QueryFn } from './sql-filters';
 
 const num = (v: unknown): number => Number(v ?? 0);
@@ -56,6 +56,7 @@ const INVESTOR = `u."deletedAt" IS NULL AND u."userType"::text = 'investor'`;
 
 interface SalesBucket {
   sales: number;
+  reinvest: number;
   tickets: number;
   investors: number;
 }
@@ -67,11 +68,17 @@ async function salesBuckets(q: QueryFn, f: Filters, bucket: Bucket): Promise<Map
   const rows = await q(
     `WITH ${b.cte}
 SELECT ${bucketOf(bucket, 'dep_date')} AS label, SUM(amount)::float8 AS sales,
+  COALESCE(SUM(amount) FILTER (WHERE payment_method = 'reinvest'), 0)::float8 AS reinvest,
   COUNT(DISTINCT "orderId")::int AS tickets, COUNT(DISTINCT "userId")::int AS investors
 FROM base GROUP BY 1`,
     p.values,
   );
-  return new Map(rows.map((r) => [String(r.label), { sales: num(r.sales), tickets: num(r.tickets), investors: num(r.investors) }]));
+  return new Map(rows.map((r) => [String(r.label), {
+    sales: num(r.sales),
+    reinvest: num(r.reinvest),
+    tickets: num(r.tickets),
+    investors: num(r.investors),
+  }]));
 }
 
 /**
@@ -141,10 +148,10 @@ WHERE r."deletedAt" IS NULL AND r.status::text = 'completed'
 // ------------------------------------------------------------------ sales vs reinvest
 
 /** Last 6 Dhaka months (current included) of approved deposits, reinvest vs everything else. Investors only, no other filters. */
-export async function salesVsReinvest(q: QueryFn, f: Filters, today: string): Promise<HomeData['salesVsReinvest']> {
+export async function salesVsReinvest(q: QueryFn, today: string): Promise<HomeData['salesVsReinvest']> {
   const first = startOfMonth(addMonths(today, -5));
   const p = new Params();
-  const b = salesBase(f, { from: first, to: today }, p, true);
+  const b = salesBase({ ...parseFilters(new URLSearchParams(), today), range: { from: first, to: today } }, { from: first, to: today }, p, true);
   const rows = await q(
     `WITH ${b.cte}
 SELECT ${bucketOf('month', 'b.dep_date')} AS month,
@@ -298,26 +305,56 @@ export async function recentActivity(q: QueryFn, now: Date): Promise<ActivityIte
 
 const fill = <T>(labels: string[], m: Map<string, T>, zero: T): T[] => labels.map((l) => m.get(l) ?? zero);
 
-export async function loadHome(deps: Deps, f: Filters, today: string, now: Date): Promise<HomeData> {
-  const { q } = deps;
-  const bucket = bucketFor(f.range);
-  const labels = bucketLabels(f.range, bucket);
-  const [base, sales, fresh, regs, booked, paid, mix, byProject, byCategory, payByCategory, segs, counts, recent] = await Promise.all([
-    loadCommandCenter(deps, f, today, now),
-    salesBuckets(q, f, bucket),
-    newInvestorBuckets(q, f, bucket),
-    registrationBuckets(q, f, bucket),
-    bookedBuckets(q, f, bucket),
-    payoutBuckets(q, f, bucket),
-    salesVsReinvest(q, f, today),
-    salesByProject(q, f),
-    salesByCategory(q, f),
-    payoutsByCategory(q, f),
+export type HomeSnapshot = Pick<HomeData, 'attention' | 'salesVsReinvest' | 'segments' | 'investorTotals' | 'recent'>;
+
+export async function loadHomeSnapshot(q: QueryFn, today: string, now: Date): Promise<HomeSnapshot> {
+  const [att, mix, segs, counts, recent] = await Promise.all([
+    attention(q, now),
+    salesVsReinvest(q, today),
     segments(q, now),
     investorCounts(q),
     recentActivity(q, now),
   ]);
-  const zero: SalesBucket = { sales: 0, tickets: 0, investors: 0 };
+  return {
+    attention: att,
+    salesVsReinvest: mix,
+    segments: segs,
+    investorTotals: { ...counts, active: segs.find((s) => s.key === 'active')?.investors ?? 0 },
+    recent,
+  };
+}
+
+export async function loadHome(
+  deps: Deps,
+  f: Filters,
+  today: string,
+  now: Date,
+  cachedSnapshot?: HomeSnapshot,
+): Promise<HomeData> {
+  const { q } = deps;
+  const bucket = bucketFor(f.range);
+  const labels = bucketLabels(f.range, bucket);
+  const salesPromise = salesBuckets(q, f, bucket);
+  const snapshotPromise = cachedSnapshot ? Promise.resolve(cachedSnapshot) : loadHomeSnapshot(q, today, now);
+  const salesSeriesPromise: Promise<Map<string, SalesBucketValue>> = salesPromise.then(
+    (sales) => new Map([...sales].map(([label, row]) => [label, { value: row.sales, reinvest: row.reinvest }])),
+  );
+  const [snapshot, base, sales, fresh, regs, booked, paid, byProject, byCategory, payByCategory] = await Promise.all([
+    snapshotPromise,
+    loadCommandCenter(deps, f, today, now, {
+      attention: snapshotPromise.then((snapshot) => snapshot.attention),
+      currentSales: salesSeriesPromise,
+    }),
+    salesPromise,
+    newInvestorBuckets(q, f, bucket),
+    registrationBuckets(q, f, bucket),
+    bookedBuckets(q, f, bucket),
+    payoutBuckets(q, f, bucket),
+    salesByProject(q, f),
+    salesByCategory(q, f),
+    payoutsByCategory(q, f),
+  ]);
+  const zero: SalesBucket = { sales: 0, reinvest: 0, tickets: 0, investors: 0 };
   const perBucket = labels.map((l) => sales.get(l) ?? zero);
   return {
     ...base,
@@ -331,12 +368,12 @@ export async function loadHome(deps: Deps, f: Filters, today: string, now: Date)
       avgTicket: perBucket.map((x) => (x.tickets > 0 ? x.sales / x.tickets : 0)),
     },
     payouts: fill(labels, paid, 0),
-    salesVsReinvest: mix,
+    salesVsReinvest: snapshot.salesVsReinvest,
     byProject,
     byCategory,
     payoutsByCategory: payByCategory,
-    segments: segs,
-    investorTotals: { ...counts, active: segs.find((s) => s.key === 'active')?.investors ?? 0 },
-    recent,
+    segments: snapshot.segments,
+    investorTotals: snapshot.investorTotals,
+    recent: snapshot.recent,
   };
 }

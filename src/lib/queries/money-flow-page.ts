@@ -5,11 +5,12 @@ import type { Filters } from '@/lib/filters/schema';
 import { loadMoneyFlow, type MoneyFlowData } from './money-flow';
 import type { Row } from './sql-filters';
 
-/** Only the date range matters here. Shared 60-second cache (ADR 0004). */
-export function getMoneyFlow(filters: Filters, today: string): Promise<MoneyFlowData> {
-  return unstable_cache(
+/** All SQL is range-independent; period changes reuse the same 5-minute snapshot. */
+export async function getMoneyFlow(filters: Filters, today: string): Promise<MoneyFlowData> {
+  const data = await unstable_cache(
     () => loadMoneyFlow((sql, params) => querySource<Row>(sql, params), filters.range, today, new Date()),
-    ['money-flow-v2', today, filters.range.from, filters.range.to],
-    { revalidate: 60 },
+    ['money-flow-v3', today],
+    { revalidate: 300 },
   )();
+  return { ...data, range: filters.range };
 }

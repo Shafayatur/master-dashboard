@@ -93,7 +93,7 @@ export function bucketLabels(r: DateRange, bucket: Bucket): string[] {
   return out;
 }
 
-interface SalesBucketValue {
+export interface SalesBucketValue {
   value: number;
   reinvest: number;
 }
@@ -116,10 +116,14 @@ interface SalesSeriesDataPoint extends SeriesPoint {
   reinvest: number;
 }
 
-async function salesSeriesData(q: QueryFn, f: Filters): Promise<{ bucket: Bucket; points: SalesSeriesDataPoint[] }> {
+async function salesSeriesData(
+  q: QueryFn,
+  f: Filters,
+  currentBuckets?: Map<string, SalesBucketValue> | Promise<Map<string, SalesBucketValue>>,
+): Promise<{ bucket: Bucket; points: SalesSeriesDataPoint[] }> {
   const bucket = bucketFor(f.range);
   const [cur, cmp] = await Promise.all([
-    salesByBucket(q, f, f.range, bucket),
+    currentBuckets ?? salesByBucket(q, f, f.range, bucket),
     f.compareRange ? salesByBucket(q, f, f.compareRange, bucket) : Promise.resolve(null),
   ]);
   const labels = bucketLabels(f.range, bucket);
@@ -138,8 +142,12 @@ async function salesSeriesData(q: QueryFn, f: Filters): Promise<{ bucket: Bucket
   return { bucket, points };
 }
 
-export async function salesSeries(q: QueryFn, f: Filters): Promise<{ bucket: Bucket; points: SeriesPoint[] }> {
-  const series = await salesSeriesData(q, f);
+export async function salesSeries(
+  q: QueryFn,
+  f: Filters,
+  currentBuckets?: Map<string, SalesBucketValue> | Promise<Map<string, SalesBucketValue>>,
+): Promise<{ bucket: Bucket; points: SeriesPoint[] }> {
+  const series = await salesSeriesData(q, f, currentBuckets);
   return { bucket: series.bucket, points: series.points.map(({ label, value, compare, compareLabel }) => ({ label, value, compare, compareLabel })) };
 }
 
@@ -147,10 +155,15 @@ export async function salesInvestmentSeries(
   q: QueryFn,
   f: Filters,
 ): Promise<{ bucket: Bucket; points: { label: string; value: number; reinvest: number }[] }> {
-  const series = await salesSeriesData(q, f);
+  const bucket = bucketFor(f.range);
+  const labels = bucketLabels(f.range, bucket);
+  const current = await salesByBucket(q, f, f.range, bucket);
   return {
-    bucket: series.bucket,
-    points: series.points.map(({ label, value, reinvest }) => ({ label, value, reinvest })),
+    bucket,
+    points: labels.map((label) => {
+      const currentPoint = current.get(label);
+      return { label, value: currentPoint?.value ?? 0, reinvest: currentPoint?.reinvest ?? 0 };
+    }),
   };
 }
 
@@ -238,13 +251,22 @@ export interface Deps {
   getTarget: (monthStart: string) => Promise<number | null>;
 }
 
-export async function loadCommandCenter(deps: Deps, f: Filters, today: string, now: Date): Promise<CommandCenterData> {
+export async function loadCommandCenter(
+  deps: Deps,
+  f: Filters,
+  today: string,
+  now: Date,
+  snapshot?: {
+    attention?: Attention | Promise<Attention>;
+    currentSales?: Map<string, SalesBucketValue> | Promise<Map<string, SalesBucketValue>>;
+  },
+): Promise<CommandCenterData> {
   const { q, getTarget } = deps;
   const [current, previous, trend, att, target] = await Promise.all([
     periodKpis(q, f, f.range),
     f.compareRange ? periodKpis(q, f, f.compareRange) : Promise.resolve(null),
-    salesSeries(q, f),
-    attention(q, now),
+    salesSeries(q, f, snapshot?.currentSales),
+    snapshot?.attention ?? attention(q, now),
     targetPacing(q, getTarget, f, today),
   ]);
   return {
