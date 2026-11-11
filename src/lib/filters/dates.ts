@@ -53,7 +53,7 @@ export function addMonths(ymd: string, n: number): string {
   return fmt(new Date(Date.UTC(y, m0, day)));
 }
 
-export const PRESETS = ['today', 'yesterday', 'last7', 'last30', 'last90', 'mtd', 'lastMonth', 'qtd', 'ytd'] as const;
+export const PRESETS = ['today', 'yesterday', 'last7', 'last30', 'last90', 'mtd', 'lastMonth', 'qtd', 'ytd', 'lifetime'] as const;
 export type PresetId = (typeof PRESETS)[number];
 
 export const PRESET_LABELS: Record<PresetId, string> = {
@@ -66,6 +66,7 @@ export const PRESET_LABELS: Record<PresetId, string> = {
   lastMonth: 'Last month',
   qtd: 'This quarter',
   ytd: 'This year',
+  lifetime: 'Life time',
 };
 
 export function resolvePreset(preset: PresetId, today: string): DateRange {
@@ -92,6 +93,8 @@ export function resolvePreset(preset: PresetId, today: string): DateRange {
       return { from: startOfQuarter(today), to: today };
     case 'ytd':
       return { from: startOfYear(today), to: today };
+    case 'lifetime':
+      return { from: '2021-01-01', to: today };
   }
 }
 

@@ -25,6 +25,7 @@ describe('dates', () => {
     expect(resolvePreset('last30', TODAY)).toEqual({ from: '2026-09-14', to: TODAY });
     expect(resolvePreset('qtd', TODAY)).toEqual({ from: '2026-10-01', to: TODAY });
     expect(resolvePreset('ytd', TODAY)).toEqual({ from: '2026-01-01', to: TODAY });
+    expect(resolvePreset('lifetime', TODAY)).toEqual({ from: '2021-01-01', to: TODAY });
     expect(resolvePreset('lastMonth', '2026-01-10')).toEqual({ from: '2025-12-01', to: '2025-12-31' });
   });
   it('compares: previous period has equal length and sits right before', () => {
@@ -84,6 +85,13 @@ describe('parseFilters', () => {
     expect(q.has('from')).toBe(false);
     expect(parseFilters(q, '2026-11-02').range).toEqual({ from: '2026-10-27', to: '2026-11-02' });
   });
+  it('accepts the lifetime preset and suppresses comparison ranges', () => {
+    const f = parseFilters(new URLSearchParams('p=lifetime'), TODAY);
+    expect(f.preset).toBe('lifetime');
+    expect(f.range).toEqual({ from: '2021-01-01', to: TODAY });
+    expect(f.compareRange).toBeNull();
+    expect(serializeFilters(f).get('p')).toBe('lifetime');
+  });
 });
 
 import { defaultFilters, patchFilters } from './schema';
@@ -98,6 +106,9 @@ describe('patchFilters', () => {
     const c = patchFilters(f, { date: { preset: 'custom', range: { from: '2026-09-10', to: '2026-09-01' } } }, TODAY);
     expect(c.range).toEqual({ from: '2026-09-01', to: '2026-09-10' });
     expect(c.preset).toBe('custom');
+    const lifetime = patchFilters(f, { date: { preset: 'lifetime' } }, TODAY);
+    expect(lifetime.range).toEqual({ from: '2021-01-01', to: TODAY });
+    expect(lifetime.compareRange).toBeNull();
   });
   it('never allows an empty deposit status selection', () => {
     expect(patchFilters(defaultFilters(TODAY), { depositStatus: [] }, TODAY).depositStatus).toEqual(['approved']);
