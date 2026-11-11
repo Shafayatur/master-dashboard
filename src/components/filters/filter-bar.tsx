@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
 import { CalendarDays, Check, ChevronDown, RotateCcw, SlidersHorizontal } from 'lucide-react';
 import { COMPARE_LABELS, COMPARE_MODES, PRESETS, PRESET_LABELS, isValidYmd, type CompareMode } from '@/lib/filters/dates';
 import { formatRange } from '@/lib/filters/format';
 import {
   DEPOSIT_STATUSES, INVESTOR_KINDS, ORDER_STATUSES, PAYMENT_METHODS, RETURN_TYPES, SEGMENTS, SHARIAH,
-  activeFilterCount, type FilterPatch, type Filters,
+  DEFAULT_COMPARE, type FilterPatch, type Filters,
 } from '@/lib/filters/schema';
 import { cn } from '@/components/ui/cn';
 import { Popover, triggerClass } from '@/components/ui/popover';
@@ -158,8 +159,18 @@ function DatePicker({ filters, update }: { filters: Filters; update: (p: FilterP
   );
 }
 
-function MoreFilters({ filters, update }: { filters: Filters; update: (p: FilterPatch) => void }) {
-  const extra = [filters.tenures.length > 0, filters.returnTypes.length > 0, filters.shariah !== 'all', filters.investorKind !== 'all', filters.segments.length > 0].filter(Boolean).length;
+function moreFilterCount(filters: Filters, showInvestorSegment: boolean): number {
+  return [
+    filters.tenures.length > 0,
+    filters.returnTypes.length > 0,
+    filters.shariah !== 'all',
+    filters.investorKind !== 'all',
+    showInvestorSegment && filters.segments.length > 0,
+  ].filter(Boolean).length;
+}
+
+function MoreFilters({ filters, update, showInvestorSegment }: { filters: Filters; update: (p: FilterPatch) => void; showInvestorSegment: boolean }) {
+  const extra = moreFilterCount(filters, showInvestorSegment);
   return (
     <Popover
       active={extra > 0}
@@ -208,56 +219,88 @@ function MoreFilters({ filters, update }: { filters: Filters; update: (p: Filter
           </CheckRow>
         ))}
       </fieldset>
-      <fieldset>
-        <legend className="mb-1 text-sm font-medium">Investor segment</legend>
-        {SEGMENTS.map((s) => (
-          <CheckRow key={s} checked={filters.segments.includes(s)} onChange={() => update({ segments: toggle(filters.segments, s) })}>
-            {LABELS.segment[s]}
-          </CheckRow>
-        ))}
-      </fieldset>
+      {showInvestorSegment && (
+        <fieldset>
+          <legend className="mb-1 text-sm font-medium">Investor segment</legend>
+          {SEGMENTS.map((s) => (
+            <CheckRow key={s} checked={filters.segments.includes(s)} onChange={() => update({ segments: toggle(filters.segments, s) })}>
+              {LABELS.segment[s]}
+            </CheckRow>
+          ))}
+        </fieldset>
+      )}
     </Popover>
   );
 }
 
 export function FilterBar() {
   const { filters, update, reset, pending } = useFilters();
-  const count = activeFilterCount(filters);
-  const dirty = count > 0 || filters.preset !== 'mtd' || filters.compare !== 'lastMonth';
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const table = searchParams.get('t');
+
+  if (pathname === '/actions' || pathname === '/targets' || pathname === '/design' || pathname.startsWith('/investors/')) {
+    return null;
+  }
+
+  const dateOnly = pathname === '/investors' || pathname === '/money-flow';
+  const explorer = pathname === '/explorer';
+  const explorerDeposits = explorer && (table === null || table === 'deposits');
+  const showInvestorSegment = explorer && table === 'investors';
+  const dirtyMoreFilters = moreFilterCount(filters, showInvestorSegment) > 0;
+  const dirty = dateOnly
+    ? filters.preset !== 'mtd'
+    : explorer
+      ? filters.preset !== 'mtd' || (explorerDeposits && filters.paymentMethod.length > 0) || dirtyMoreFilters
+      : filters.preset !== 'mtd' ||
+        filters.compare !== DEFAULT_COMPARE ||
+        !(filters.depositStatus.length === 1 && filters.depositStatus[0] === 'approved') ||
+        filters.orderStatus.length > 0 ||
+        filters.paymentMethod.length > 0 ||
+        filters.excludeReinvest ||
+        dirtyMoreFilters;
 
   return (
     <div className="relative z-20 border-b border-line bg-surface/90 px-4 py-3 backdrop-blur sm:px-6 print:hidden" aria-busy={pending}>
       <div className="flex flex-wrap items-center gap-2">
         <DatePicker key={`${filters.range.from}_${filters.range.to}`} filters={filters} update={update} />
-        <label className={cn(triggerClass, 'relative gap-1.5 pr-2')}>
-          <span className="text-muted">vs</span>
-          <select
-            aria-label="Compare with"
-            value={filters.compare}
-            onChange={(e) => update({ compare: e.target.value as CompareMode })}
-            className="cursor-pointer bg-transparent pr-1 text-sm font-medium outline-none"
+        {!dateOnly && !explorer && (
+          <>
+            <label className={cn(triggerClass, 'relative gap-1.5 pr-2')}>
+              <span className="text-muted">vs</span>
+              <select
+                aria-label="Compare with"
+                value={filters.compare}
+                onChange={(e) => update({ compare: e.target.value as CompareMode })}
+                className="cursor-pointer bg-transparent pr-1 text-sm font-medium outline-none"
+              >
+                {COMPARE_MODES.map((m) => (
+                  <option key={m} value={m}>
+                    {COMPARE_LABELS[m]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <span className="mx-1 hidden h-5 w-px bg-line sm:block" aria-hidden />
+            <MultiSelect title="Deposits" none="Approved" options={DEPOSIT_STATUSES} labels={LABELS.deposit} selected={filters.depositStatus.length === 1 && filters.depositStatus[0] === 'approved' ? [] : filters.depositStatus} onChange={(depositStatus) => update({ depositStatus })} />
+            <MultiSelect title="Orders" none="All" options={ORDER_STATUSES} labels={LABELS.order} selected={filters.orderStatus} onChange={(orderStatus) => update({ orderStatus })} />
+          </>
+        )}
+        {!dateOnly && (!explorer || explorerDeposits) && (
+          <MultiSelect title="Payment" none="All" options={PAYMENT_METHODS} labels={LABELS.payment} selected={filters.paymentMethod} onChange={(paymentMethod) => update({ paymentMethod })} />
+        )}
+        {!dateOnly && !explorer && (
+          <button
+            type="button"
+            role="switch"
+            aria-checked={filters.excludeReinvest}
+            onClick={() => update({ excludeReinvest: !filters.excludeReinvest })}
+            className={cn(triggerClass, filters.excludeReinvest && 'border-emerald-600/50 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200')}
           >
-            {COMPARE_MODES.map((m) => (
-              <option key={m} value={m}>
-                {COMPARE_LABELS[m]}
-              </option>
-            ))}
-          </select>
-        </label>
-        <span className="mx-1 hidden h-5 w-px bg-line sm:block" aria-hidden />
-        <MultiSelect title="Deposits" none="Approved" options={DEPOSIT_STATUSES} labels={LABELS.deposit} selected={filters.depositStatus.length === 1 && filters.depositStatus[0] === 'approved' ? [] : filters.depositStatus} onChange={(depositStatus) => update({ depositStatus })} />
-        <MultiSelect title="Orders" none="All" options={ORDER_STATUSES} labels={LABELS.order} selected={filters.orderStatus} onChange={(orderStatus) => update({ orderStatus })} />
-        <MultiSelect title="Payment" none="All" options={PAYMENT_METHODS} labels={LABELS.payment} selected={filters.paymentMethod} onChange={(paymentMethod) => update({ paymentMethod })} />
-        <button
-          type="button"
-          role="switch"
-          aria-checked={filters.excludeReinvest}
-          onClick={() => update({ excludeReinvest: !filters.excludeReinvest })}
-          className={cn(triggerClass, filters.excludeReinvest && 'border-emerald-600/50 bg-emerald-50 text-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200')}
-        >
-          Exclude reinvest
-        </button>
-        <MoreFilters filters={filters} update={update} />
+            Exclude reinvest
+          </button>
+        )}
+        {!dateOnly && <MoreFilters filters={filters} update={update} showInvestorSegment={showInvestorSegment} />}
         {dirty && (
           <button type="button" onClick={reset} className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2 text-sm text-muted hover:text-fg">
             <RotateCcw className="h-3.5 w-3.5" aria-hidden />
@@ -265,7 +308,7 @@ export function FilterBar() {
           </button>
         )}
       </div>
-      {filters.compareRange && <p className="mt-2 text-xs text-muted">Compared with {formatRange(filters.compareRange)}</p>}
+      {!dateOnly && !explorer && filters.compareRange && <p className="mt-2 text-xs text-muted">Compared with {formatRange(filters.compareRange)}</p>}
     </div>
   );
 }
