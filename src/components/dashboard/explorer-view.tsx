@@ -97,7 +97,7 @@ export function ExplorerView({ data, params, searchParams }: Props) {
   const to = Math.min(data.page * data.pageSize, data.total);
 
   return (
-    <div className="space-y-5">
+    <div className="min-w-0 space-y-5">
       <div className="animate-rise">
         <h2 className="text-xl font-semibold tracking-tight">Data Explorer</h2>
         <p className="mt-1 text-sm text-muted">
@@ -227,7 +227,7 @@ export function ExplorerView({ data, params, searchParams }: Props) {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-line bg-surface">
+      <div className="min-w-0 overflow-x-auto rounded-xl border border-line bg-surface">
         {data.rows.length === 0 ? (
           <p className="p-4 text-sm text-muted">No records for these filters.</p>
         ) : (

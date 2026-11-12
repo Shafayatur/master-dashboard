@@ -94,8 +94,9 @@ export function AreaChart({ labels, series, bucket, unit, height = 260 }: Props)
           </li>
         ))}
       </ul>
-      <div ref={box} className="relative w-full">
+      <div ref={box} className="relative w-full overflow-hidden">
         <svg
+          className="block max-w-full"
           width={width}
           height={height}
           role="img"

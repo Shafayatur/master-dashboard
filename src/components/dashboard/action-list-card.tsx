@@ -29,8 +29,8 @@ export function ActionListCard({
   emptyText,
 }: Props) {
   return (
-    <section className="rounded-xl border border-line bg-surface p-4">
-      <div className="flex items-start justify-between gap-3">
+    <section className="min-w-0 rounded-xl border border-line bg-surface p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="flex items-center gap-2">
             <h3 className="text-sm font-medium">{title}</h3>
@@ -63,14 +63,14 @@ export function ActionListCard({
         <p className="mt-4 text-sm text-muted">{emptyText}</p>
       ) : (
         <div className="mt-4 max-h-96 overflow-auto">
-          <table className="w-full text-left">
+          <table className="w-full min-w-[540px] text-left">
             <thead className="sticky top-0 z-10 bg-surface text-xs uppercase text-muted">
               <tr>
                 {headers.map((header, column) => (
                   <th
                     key={header}
                     scope="col"
-                    className={`px-2 py-2 font-medium first:pl-0 last:pr-0 ${rows.every((row) => isNumericCell(row[column])) ? 'text-right' : ''}`}
+                    className={`whitespace-nowrap px-2 py-2 font-medium first:pl-0 last:pr-0 ${rows.every((row) => isNumericCell(row[column])) ? 'text-right' : ''}`}
                   >
                     {header}
                   </th>
@@ -83,7 +83,7 @@ export function ActionListCard({
                   {headers.map((header, column) => (
                     <td
                       key={`${header}-${column}`}
-                      className={`px-2 py-2 first:pl-0 last:pr-0 ${isNumericCell(row[column]) ? 'text-right tabular-nums' : ''}`}
+                      className={`px-2 py-2 first:pl-0 last:pr-0 ${isNumericCell(row[column]) ? 'whitespace-nowrap text-right tabular-nums' : ''}`}
                     >
                       {row[column]}
                     </td>

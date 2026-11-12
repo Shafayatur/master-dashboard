@@ -12,7 +12,7 @@ const headingCell = 'whitespace-nowrap px-3 py-2 text-right text-xs font-medium 
 
 export function ProjectScorecard({ rows, unit }: Props) {
   return (
-    <section className={card}>
+    <section className={`${card} min-w-0`}>
       <div className="mb-4">
         <h3 className="text-sm font-medium">Project scorecard</h3>
         <p className="mt-1 text-xs text-muted">Top 15 by investment value</p>

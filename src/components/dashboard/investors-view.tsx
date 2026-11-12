@@ -164,8 +164,8 @@ export function InvestorsView({ data, extras, unit, search, today }: Props) {
         ))}
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="space-y-4">
+      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="min-w-0 space-y-4">
           <div className="grid gap-4 lg:grid-cols-2">
             <ChartCard
               className="lg:col-span-2"
@@ -209,7 +209,7 @@ export function InvestorsView({ data, extras, unit, search, today }: Props) {
               <BarChart items={tierItems} unit={unit} kind={tierMetric === 'investors' ? 'int' : 'money'} height={250} />
             </ChartCard>
 
-            <section className={card}>
+            <section className={`${card} min-w-0`}>
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <h3 className="text-sm font-medium">Investment depth</h3>
@@ -350,7 +350,7 @@ export function InvestorsView({ data, extras, unit, search, today }: Props) {
           <CohortTable cohorts={cohorts} medianDaysToFirst={data.medianDaysToFirst} />
         </div>
 
-        <aside className={card}>
+        <aside className={`${card} min-w-0`}>
           <h3 className="text-sm font-medium">What to act on</h3>
           {insights.length > 0 ? (
             <ul className="mt-3 space-y-3">

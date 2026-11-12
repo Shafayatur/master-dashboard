@@ -95,7 +95,7 @@ export function InvestorSearch() {
   };
 
   return (
-    <div ref={container} className="relative hidden w-full max-w-md sm:block">
+    <div ref={container} className="relative min-w-0 flex-1 max-w-[13rem] sm:max-w-md">
       <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" aria-hidden />
       <input
         type="search"
@@ -123,7 +123,7 @@ export function InvestorSearch() {
         <ul
           id="investor-search-results"
           role="listbox"
-          className="absolute left-0 right-0 top-full z-50 mt-1 max-h-80 overflow-auto rounded-lg border border-line bg-surface py-1 shadow-md"
+          className="absolute right-0 top-full z-50 mt-1 max-h-80 w-[min(22rem,calc(100vw-2rem))] overflow-auto rounded-lg border border-line bg-surface py-1 shadow-md sm:left-0 sm:w-auto"
         >
           {unavailable ? (
             <li className="px-3 py-2 text-sm text-muted">Search unavailable</li>

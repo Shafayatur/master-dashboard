@@ -139,7 +139,7 @@ export function InvestorProfileView({ p, unit }: Props) {
         Back to Investors
       </Link>
 
-      <section className={card}>
+      <section className={`${card} min-w-0`}>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="flex flex-wrap items-center gap-2">
@@ -193,7 +193,7 @@ export function InvestorProfileView({ p, unit }: Props) {
       </div>
 
 
-      <section className={card}>
+      <section className={`${card} min-w-0`}>
         <div role="tablist" aria-label="Investor records" className="mb-4 inline-flex rounded-lg border border-line p-0.5 text-xs">
           {([
             { id: 'investments', label: 'Investments', count: p.orders.length },
@@ -244,7 +244,7 @@ export function InvestorProfileView({ p, unit }: Props) {
           role="tabpanel"
           aria-labelledby={`profile-tab-${activeTab}`}
           tabIndex={0}
-          className="focus-visible:outline-none"
+          className="min-w-0 focus-visible:outline-none"
         >
           {activeTab === 'investments' && (
             <ProfileTable

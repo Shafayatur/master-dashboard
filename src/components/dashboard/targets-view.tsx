@@ -83,9 +83,9 @@ export function TargetsView({ data, unit }: { data: TargetsOverview; unit: Money
         <BarChart items={chartItems} unit={unit} mode="grouped" />
       </ChartCard>
 
-      <div className="grid gap-4 xl:grid-cols-3">
-        <TargetForm defaultMonth={data.currentMonth.slice(0, 7)} />
-        <section className={`${card} xl:col-span-2`}>
+      <div className="grid min-w-0 gap-4 xl:grid-cols-3">
+        <div className="min-w-0"><TargetForm defaultMonth={data.currentMonth.slice(0, 7)} /></div>
+        <section className={`${card} min-w-0 xl:col-span-2`}>
           <h3 className="text-sm font-medium">Recent and upcoming months</h3>
           <div className="mt-3 overflow-x-auto">
             <table className="w-full min-w-[760px] text-left text-sm">

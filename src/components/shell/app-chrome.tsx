@@ -16,11 +16,11 @@ export function AppChrome({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen lg:pl-60 print:pl-0">
       <Sidebar open={open} onClose={() => setOpen(false)} />
-      <header className="flex h-14 items-center gap-3 border-b border-line bg-surface px-4 sm:px-6 print:hidden">
-        <button type="button" onClick={() => setOpen(true)} aria-label="Open menu" className="lg:hidden">
+      <header className="flex h-14 items-center gap-2 border-b border-line bg-surface px-4 sm:gap-3 sm:px-6 print:hidden">
+        <button type="button" onClick={() => setOpen(true)} aria-label="Open menu" className="shrink-0 lg:hidden">
           <Menu className="h-5 w-5" aria-hidden />
         </button>
-        <h1 className="text-lg font-semibold tracking-tight">{title}</h1>
+        <h1 className="shrink-0 text-base font-semibold tracking-tight sm:text-lg">{title}</h1>
         <div className="flex-1" />
         <InvestorSearch />
       </header>

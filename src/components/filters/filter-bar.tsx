@@ -115,7 +115,7 @@ function DatePicker({ filters, update }: { filters: Filters; update: (p: FilterP
       panelClassName="w-[20rem]"
     >
       {(close) => (
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <ul className="space-y-0.5">
             {PRESETS.map((p) => (
               <li key={p}>
@@ -132,7 +132,7 @@ function DatePicker({ filters, update }: { filters: Filters; update: (p: FilterP
               </li>
             ))}
           </ul>
-          <div className="space-y-2 border-l border-line pl-3">
+          <div className="space-y-2 border-t border-line pt-3 sm:border-l sm:border-t-0 sm:pl-3 sm:pt-0">
             <label className="block text-xs text-muted">
               From
               <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="mt-1 h-9 w-full rounded-md border border-line bg-surface px-2 text-sm" />

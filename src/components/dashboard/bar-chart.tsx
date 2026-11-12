@@ -79,8 +79,9 @@ export function BarChart({ items, unit, kind = 'money', height = 220, mode = 'st
   };
 
   return (
-    <div ref={box} className="relative w-full">
+    <div ref={box} className="relative w-full overflow-hidden">
       <svg
+        className="block max-w-full"
         width={width}
         height={height}
         role="img"

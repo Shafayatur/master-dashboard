@@ -37,7 +37,7 @@ function RateCell({ count, registered, complete }: { count: number; registered: 
 
 export function CohortTable({ cohorts, medianDaysToFirst }: Props) {
   return (
-    <section className={card}>
+    <section className={`${card} min-w-0`}>
       <div className="mb-4">
         <h3 className="text-sm font-medium">Registration cohorts: conversion to first investment</h3>
         <p className="mt-1 text-xs text-muted">Recent months are still maturing, so their rates will rise.</p>

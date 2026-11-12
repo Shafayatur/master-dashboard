@@ -40,9 +40,9 @@ export function PageTools({ generatedAt, unit }: { generatedAt: string; unit: Mo
   );
 
   return (
-    <div className="flex items-center gap-3 text-xs text-muted print:hidden">
+    <div className="flex flex-wrap items-center gap-2 text-xs text-muted print:hidden sm:gap-3">
       <span>Updated {formatDhaka(new Date(generatedAt)).slice(11)} Dhaka</span>
-      <div className="flex items-center gap-3 print:hidden">
+      <div className="flex flex-wrap items-center gap-2 print:hidden sm:gap-3">
         <PrintButton />
         <button type="button" onClick={refresh} aria-label="Refresh now" className="rounded-md border border-line p-1.5 hover:text-fg">
           <RefreshCw className={cn('h-3.5 w-3.5', pending && 'animate-spin')} aria-hidden />

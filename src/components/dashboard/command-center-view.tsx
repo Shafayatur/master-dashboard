@@ -350,9 +350,9 @@ export function CommandCenterView({ data, filters, unit, today }: { data: HomeDa
       </div>
 
       {/* Two-column layout ------------------------------------------------- */}
-      <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
         {/* Main area */}
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           {/* Row 1: four primary KPIs */}
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <KpiCard i={0} icon={Wallet} tone="blue" label="Investment value" delta={dSales} spark={<Sparkline values={data.kpiSpark.sales} tone={sparkTone(dSales)} />}>
@@ -462,7 +462,7 @@ export function CommandCenterView({ data, filters, unit, today }: { data: HomeDa
         </div>
 
         {/* Right rail */}
-        <div className="space-y-4 xl:sticky xl:top-4 xl:self-start">
+        <div className="min-w-0 space-y-4 xl:sticky xl:top-4 xl:self-start">
           <QuickInsightsCard insights={insights} />
           <RecentActivityCard items={data.recent} unit={unit} nowMs={nowMs} />
           <Attention data={data} unit={unit} />
