@@ -13,13 +13,14 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
   const pathname = usePathname();
   const router = useRouter();
   const { filters } = useFilters();
-  const isInvestorSegmentDrilldown = pathname === '/explorer' && filters.segments.length > 0;
+  const isExplorer = pathname === '/explorer';
+  const isInvestorSegmentDrilldown = isExplorer && filters.segments.length > 0;
   const isAllTimeDrilldown = filters.preset === 'lifetime' || filters.range.from <= '2021-01-01';
 
   function queryForTab(href: string): string {
-    if (!isInvestorSegmentDrilldown || href === '/explorer') return serializeFilters(filters).toString();
-    const query = serializeFilters({ ...filters, segments: [] });
-    if (isAllTimeDrilldown) {
+    if (!isExplorer || href === '/explorer') return serializeFilters(filters).toString();
+    const query = serializeFilters({ ...filters, segments: [], products: [], categories: [] });
+    if (isInvestorSegmentDrilldown && isAllTimeDrilldown) {
       query.delete('p');
       query.delete('from');
       query.delete('to');

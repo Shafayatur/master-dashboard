@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { CalendarDays, Check, ChevronDown, RotateCcw, SlidersHorizontal } from 'lucide-react';
+import { CalendarDays, Check, ChevronDown, RotateCcw, SlidersHorizontal, X } from 'lucide-react';
 import { COMPARE_LABELS, COMPARE_MODES, PRESETS, PRESET_LABELS, isValidYmd, type CompareMode } from '@/lib/filters/dates';
 import { formatRange } from '@/lib/filters/format';
 import {
@@ -245,15 +245,17 @@ export function FilterBar() {
   const explorerDeposits = explorer && (table === null || table === 'deposits');
   const showInvestorSegment = explorer;
   const dirtyMoreFilters = moreFilterCount(filters, showInvestorSegment) > 0;
+  const hasDrilldownFilters = filters.products.length > 0 || filters.categories.length > 0 || filters.segments.length > 0;
   const dirty = explorer
-    ? filters.preset !== 'mtd' || (explorerDeposits && filters.paymentMethod.length > 0) || dirtyMoreFilters
+    ? filters.preset !== 'mtd' || (explorerDeposits && filters.paymentMethod.length > 0) || dirtyMoreFilters || hasDrilldownFilters
     : filters.preset !== 'mtd' ||
       filters.compare !== DEFAULT_COMPARE ||
       !(filters.depositStatus.length === 1 && filters.depositStatus[0] === 'approved') ||
       filters.orderStatus.length > 0 ||
       filters.paymentMethod.length > 0 ||
       filters.excludeReinvest ||
-      dirtyMoreFilters;
+      dirtyMoreFilters ||
+      hasDrilldownFilters;
 
   return (
     <div className="relative z-20 border-b border-line bg-surface/90 px-4 py-3 backdrop-blur sm:px-6 print:hidden" aria-busy={pending}>
@@ -295,6 +297,42 @@ export function FilterBar() {
             Exclude reinvest
           </button>
         )}
+        {!explorer && filters.products.map((product) => (
+          <button
+            key={`product-${product}`}
+            type="button"
+            onClick={() => update({ products: filters.products.filter((value) => value !== product) })}
+            aria-label={`Remove product ${product} filter`}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line px-2 text-sm text-muted hover:text-fg"
+          >
+            Product: {product}
+            <X className="h-3.5 w-3.5" aria-hidden />
+          </button>
+        ))}
+        {!explorer && filters.categories.map((category) => (
+          <button
+            key={`category-${category}`}
+            type="button"
+            onClick={() => update({ categories: filters.categories.filter((value) => value !== category) })}
+            aria-label={`Remove category ${category} filter`}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line px-2 text-sm text-muted hover:text-fg"
+          >
+            Category: {category}
+            <X className="h-3.5 w-3.5" aria-hidden />
+          </button>
+        ))}
+        {!explorer && filters.segments.map((segment) => (
+          <button
+            key={segment}
+            type="button"
+            onClick={() => update({ segments: filters.segments.filter((value) => value !== segment) })}
+            aria-label={`Remove ${LABELS.segment[segment]} segment filter`}
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-line px-2 text-sm text-muted hover:text-fg"
+          >
+            Segment: {LABELS.segment[segment]}
+            <X className="h-3.5 w-3.5" aria-hidden />
+          </button>
+        ))}
         <MoreFilters filters={filters} update={update} showInvestorSegment={showInvestorSegment} />
         {dirty && (
           <button type="button" onClick={reset} className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2 text-sm text-muted hover:text-fg">
