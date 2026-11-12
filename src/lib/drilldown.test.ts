@@ -63,23 +63,22 @@ describe('donut drill-down mappings', () => {
     expect(depositSliceHref(params, 'prod', '1', Number.NaN)).toBeUndefined();
   });
 
-  it('maps investor segment snapshots to the all-time Explorer range', () => {
+  it('maps investor segment snapshots to the lifetime Explorer preset', () => {
     const href = investorSegmentHref(
       'p=last30&from=2026-09-29&to=2026-10-28&prod=2&page=3',
       'cooling',
-      '2026-10-28',
       4,
     );
-    expect(ALL_TIME).toEqual({ from: '2015-01-01' });
+    expect(ALL_TIME).toEqual({ from: '2021-01-01' });
     const query = new URL(href ?? '', 'https://example.test').searchParams;
     expect(query.get('t')).toBe('investors');
-    expect(query.get('p')).toBe('custom');
-    expect(query.get('from')).toBe('2015-01-01');
-    expect(query.get('to')).toBe('2026-10-28');
+    expect(query.get('p')).toBe('lifetime');
+    expect(query.has('from')).toBe(false);
+    expect(query.has('to')).toBe(false);
     expect(query.has('prod')).toBe(false);
     expect(query.get('seg')).toBe('cooling');
-    expect(investorSegmentHref('', 'unknown', '2026-10-28', 1)).toBeUndefined();
-    expect(investorSegmentHref('', 'cooling', '2026-10-28', 0)).toBeUndefined();
+    expect(investorSegmentHref('', 'unknown', 1)).toBeUndefined();
+    expect(investorSegmentHref('', 'cooling', 0)).toBeUndefined();
   });
 
   it('maps only confirmed reinvestment to approved reinvest deposits', () => {

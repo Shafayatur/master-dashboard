@@ -107,7 +107,7 @@ export function InvestorsView({ data, extras, unit, search, today }: Props) {
     label: SEGMENT_INFO[segment.key].label,
     value: segment.investors,
     color: SEGMENT_INFO[segment.key].color,
-    href: investorSegmentHref(search, segment.key, today, segment.investors),
+    href: investorSegmentHref(search, segment.key, segment.investors),
   }));
   const segmentByKey = new Map(data.segments.map((segment) => [segment.key, segment]));
   const registered = data.totalInvestors;

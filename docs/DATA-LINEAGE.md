@@ -14,7 +14,7 @@
 | Display | Data logic |
 | --- | --- |
 | New registrations | Investors whose account creation timestamp falls in the selected date range, grouped in Dhaka time and zero-filled by day for ranges up to 92 days or by month for longer ranges. Columns split into investors with at least one approved deposit and those without one. The deposit may have occurred after registration; staff and deleted users are excluded. Other Investors-tab cards remain snapshots. |
-| Investor segments | Snapshot segment slices link to the matching Explorer segment over the all-time registration range (2015-01-01 through today), matching the snapshot segment total rather than the current dashboard date range. |
+| Investor segments | Snapshot segment slices link to the matching Explorer segment using the Life time preset (2021-01-01 through today), matching the snapshot segment total rather than the current dashboard date range. |
 
 ## Command Center and Money Flow
 

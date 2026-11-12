@@ -13,7 +13,19 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
   const pathname = usePathname();
   const router = useRouter();
   const { filters } = useFilters();
-  const qs = serializeFilters(filters).toString(); // filters follow you from tab to tab
+  const isInvestorSegmentDrilldown = pathname === '/explorer' && filters.segments.length > 0;
+  const isAllTimeDrilldown = filters.preset === 'lifetime' || filters.range.from <= '2021-01-01';
+
+  function queryForTab(href: string): string {
+    if (!isInvestorSegmentDrilldown || href === '/explorer') return serializeFilters(filters).toString();
+    const query = serializeFilters({ ...filters, segments: [] });
+    if (isAllTimeDrilldown) {
+      query.delete('p');
+      query.delete('from');
+      query.delete('to');
+    }
+    return query.toString();
+  }
 
   async function signOut() {
     await fetch('/api/auth/logout', { method: 'POST' }).catch(() => undefined);
@@ -40,6 +52,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
         <nav className="flex-1 space-y-0.5 px-2 py-2">
           {NAV.map(({ href, label, icon: Icon }) => {
             const active = isActive(pathname, href);
+            const qs = queryForTab(href);
             return (
               <Link
                 key={href}

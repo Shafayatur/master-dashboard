@@ -150,7 +150,7 @@ describe('loadExplorer', () => {
     expect(expected.map((row) => row.key)).toEqual(SEGMENT_ORDER);
     for (const row of expected) {
       const allRegistrations = parseExplorerParams(
-        new URLSearchParams(`t=investors&seg=${row.key}&p=custom&from=2015-01-01&to=${TODAY}`),
+        new URLSearchParams(`t=investors&seg=${row.key}&p=lifetime`),
         TODAY,
       );
       const result = await loadExplorer(q, allRegistrations);
@@ -158,7 +158,7 @@ describe('loadExplorer', () => {
       expect(result.rows.every((investor) => investor.segment === row.key)).toBe(true);
     }
     const active = await loadExplorer(q, parseExplorerParams(
-      new URLSearchParams(`t=investors&seg=active&p=custom&from=2015-01-01&to=${TODAY}`),
+      new URLSearchParams('t=investors&seg=active&p=lifetime'),
       TODAY,
     ));
     expect(active.rows.some((investor) => investor.id === 15)).toBe(true);

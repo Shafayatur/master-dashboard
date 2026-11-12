@@ -294,7 +294,7 @@ export function CommandCenterView({ data, filters, unit, today }: { data: HomeDa
     label: s.key.replace(/_/g, ' ').replace(/^\w/, (ch) => ch.toUpperCase()),
     value: s.investors,
     color: SEGMENT_COLORS[s.key],
-    href: investorSegmentHref(drilldownParams, s.key, today, s.investors),
+    href: investorSegmentHref(drilldownParams, s.key, s.investors),
   }));
   const segmentTotal = data.segments.reduce((a, b) => a + b.investors, 0);
 

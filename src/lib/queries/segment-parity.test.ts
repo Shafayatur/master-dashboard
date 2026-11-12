@@ -68,7 +68,7 @@ describe('investor segment parity', () => {
     });
 
     const params = parseExplorerParams(
-      new URLSearchParams('t=investors&p=custom&from=2015-01-01&to=2026-10-14'),
+      new URLSearchParams('t=investors&p=lifetime'),
       TODAY,
     );
     const explorer = await loadExplorer(q, params, NOW);

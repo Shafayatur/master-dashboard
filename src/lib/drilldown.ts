@@ -1,6 +1,6 @@
 import { SEGMENTS, type Segment } from '@/lib/filters/schema';
 
-export const ALL_TIME = { from: '2015-01-01' } as const;
+export const ALL_TIME = { from: '2021-01-01' } as const;
 
 type SearchParams = URLSearchParams | string | Record<string, string | string[] | undefined>;
 type DepositFilter = 'prod' | 'cat' | 'ten' | 'rt' | 'pm' | 'st';
@@ -76,7 +76,6 @@ export function depositSliceHref(
 export function investorSegmentHref(
   params: SearchParams,
   segment: string,
-  today: string,
   value: number,
 ): string | undefined {
   if (!Number.isFinite(value) || value <= 0 || !isSegment(segment)) return undefined;
@@ -84,9 +83,9 @@ export function investorSegmentHref(
     table: 'investors',
     params,
     extra: {
-      p: 'custom',
-      from: ALL_TIME.from,
-      to: today,
+      p: 'lifetime',
+      from: undefined,
+      to: undefined,
       ds: undefined,
       os: undefined,
       pm: undefined,

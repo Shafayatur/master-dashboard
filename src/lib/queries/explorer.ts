@@ -18,7 +18,7 @@ export interface ExplorerColumn {
 }
 export interface ExplorerParams {
   table: ExplorerTable;
-  range: DateRange;
+  range: DateRange & { preset: Filters['preset'] };
   filters: Pick<Filters, 'products' | 'categories' | 'tenures' | 'returnTypes' | 'shariah' | 'paymentMethod' | 'investorKind'>;
   segments: Segment[];
   search: string;
@@ -226,7 +226,7 @@ export function parseExplorerParams(sp: RawParams, today: string): ExplorerParam
   const page = Number.parseInt(get('page'), 10);
   return {
     table,
-    range: parsedFilters.range,
+    range: { ...parsedFilters.range, preset: parsedFilters.preset },
     filters: {
       products: parsedFilters.products,
       categories: parsedFilters.categories,
@@ -261,15 +261,15 @@ function build(params: ExplorerParams, now: Date) {
     ? `${baseFrom} ${investorFirstDepJoin}`
     : baseFrom;
   const { start, end } = utcBounds(params.range);
-  const allTimeInvestorSegment = params.table === 'investors'
+  const isAllTimeSegmentDrilldown = params.table === 'investors'
     && params.segments.length > 0
-    && params.range.from <= '2015-01-01';
-  const startTs = allTimeInvestorSegment ? '' : `${p.add(start)}::timestamp`;
+    && (params.range.preset === 'lifetime' || params.range.from <= '2021-01-01');
+  const startTs = isAllTimeSegmentDrilldown ? '' : `${p.add(start)}::timestamp`;
   const endTs = `${p.add(end)}::timestamp`;
   const hasInvestorKind = params.filters.investorKind !== 'all';
-  const dateConds = params.table === 'investors' && hasInvestorKind && !allTimeInvestorSegment
+  const dateConds = params.table === 'investors' && hasInvestorKind && !isAllTimeSegmentDrilldown
     ? [`EXISTS (SELECT 1 FROM deposits d_range JOIN "order" o_range ON o_range.id = d_range."orderId" AND o_range."deletedAt" IS NULL WHERE o_range."userId" = u.id AND d_range."deletedAt" IS NULL AND d_range.status::text = 'approved' AND d_range."date" >= ${startTs} AND d_range."date" < ${endTs})`]
-    : allTimeInvestorSegment
+    : isAllTimeSegmentDrilldown
       ? [`(u."createdAt" IS NULL OR u."createdAt" < ${endTs})`]
     : [`${def.dateCol} >= ${startTs}`, `${def.dateCol} < ${endTs}`];
   const conds = [...def.where, ...dateConds];
