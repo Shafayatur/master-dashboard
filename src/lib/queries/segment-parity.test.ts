@@ -22,6 +22,7 @@ const EXPECTED = new Map<number, string>([
   [103, 'recently_active'],
   [104, 'prospect'],
   [105, 'active'],
+  [106, 'cooling'],
 ]);
 
 beforeAll(async () => {
@@ -41,6 +42,10 @@ beforeAll(async () => {
       (103, 'invested', '2026-10-01', 102, 1),
       (104, 'closed', '2025-01-01', 103, 1),
       (105, 'invested', '2025-01-01', 105, 1);
+    INSERT INTO "user" (id, name, "createdAt", "userType") VALUES
+      (106, 'Closed with null investment date', '2026-01-01', 'investor');
+    INSERT INTO "order" (id, status, "investmentDate", "createdAt", "userId", "productId") VALUES
+      (106, 'closed', NULL, '2026-03-04', 106, 1);
     INSERT INTO return_schedules (id, "orderId", "paymentDate") VALUES
       (101, 101, '2026-09-04'),
       (102, 102, '2026-09-01'),
@@ -57,7 +62,7 @@ describe('investor segment parity', () => {
     expect(Object.fromEntries(aggregate.map(({ key, investors }) => [key, investors]))).toEqual({
       active: 3,
       recently_active: 1,
-      cooling: 0,
+      cooling: 1,
       inactive: 0,
       prospect: 1,
     });
@@ -80,6 +85,8 @@ describe('investor segment parity', () => {
       expect(profileSegments.get(userId)).toBe(expected);
       expect(coolingIds.has(userId)).toBe(expected === 'cooling');
     }
-    expect(actions.cooling.rows.map(({ userId, daysSince }) => [userId, daysSince])).toEqual([]);
+    const profile = await investorProfile(q, 106, NOW);
+    expect(profile?.orders.find((order) => order.orderId === 106)?.maturity).toBe('2026-09-04');
+    expect(actions.cooling.rows.map(({ userId, daysSince }) => [userId, daysSince])).toEqual([[106, 40]]);
   });
 });

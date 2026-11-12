@@ -33,18 +33,17 @@ exclude soft-deleted rows (`"deletedAt" IS NOT NULL`). Amounts are BDT.
 | Export lifetime value | Sum of approved deposits on non-deleted orders, matching the action-list lifetime-value definition. First and latest investment dates use the order's `investmentDate` in Dhaka time. |
 
 ## Segments (per investor, across all their orders)
-Maturity of an order = last `return_schedules."paymentDate"`, else `investmentDate + productDuration`.
+Maturity of an order = last `return_schedules."paymentDate"`, else `COALESCE(investmentDate, createdAt) + productDuration`.
 
 | Segment | Rule |
 |---|---|
-| Active | Has an order with status `invested` that has **not yet matured**. *(Default adopted 2026-10-14: 290 invested orders, 9.7%, are already past maturity; they must not make an investor look active. Change if IR disagrees.)* |
-| Recently active | Latest maturity 0-30 days ago |
-| Cooling | Latest maturity 30-60 days ago |
-| Inactive | Latest maturity more than 60 days ago |
-| Prospect | Registered, never invested |
+| Active | Has any order with status `invested`, regardless of maturity. |
+| Recently active | Has no `invested` orders and the latest maturity of their `closed` orders was 0-30 days ago |
+| Cooling | Has no `invested` orders and the latest maturity of their `closed` orders was 30-60 days ago |
+| Inactive | Has no `invested` orders and the latest maturity of their `closed` orders was more than 60 days ago |
+| Prospect | Registered and has no `invested` or `closed` orders |
 
-Investors who are not Active are bucketed by their latest maturity across all non-cancelled orders. Invested orders past maturity are also an
-"overdue" attention counter and feed the "ready to reinvest" list. Thresholds are editable (`app_settings.segment_thresholds`).
+Only `closed` orders determine the maturity-based segments; an investor with any `invested` order is always Active. Investors with no `invested` orders and no `closed` orders are Prospects. Invested orders past maturity remain an "overdue" attention counter. Thresholds are editable (`app_settings.segment_thresholds`).
 
 ## Reinvestment (three levels, labelled honestly in the UI)
 1. **Confirmed**: deposit with `paymentMethod = 'reinvest'`.

@@ -23,14 +23,15 @@ beforeAll(async () => {
       (3,'User Three','01711000003',NULL,'2026-01-01','investor'), (4,'User Four','+8801711000004','u4@example.com','2026-01-01','investor'),
       (5,'User Five','01711000005','u5@example.com','2026-01-01','investor'), (6,'User Six','01711000006','u6@example.com','2026-01-01','investor'),
       (7,'User Seven','01711000007','u7@example.com','2026-01-01','investor'), (8,'User Eight','01711000008','u8@example.com','2026-01-01','investor'),
-      (9,'User Nine','+8801700000009','u9@example.com','2026-01-01','investor'), (10,'Staff','01700000010','s@example.com','2026-01-01','internal-staff');
+      (9,'User Nine','+8801700000009','u9@example.com','2026-01-01','investor'), (10,'Staff','01700000010','s@example.com','2026-01-01','internal-staff'),
+      (11,'User Eleven','01711000011','u11@example.com','2026-01-01','investor');
     INSERT INTO products (id, name, "productDuration") VALUES (1, 'Dairy A', '6 Months');
     INSERT INTO "order" (id, status, "totalAmount", "investmentDate", "createdAt", "userId", "productId") VALUES
       (1,'invested',15000,'2026-04-20','2026-04-20',1,1), (2,'invested',8000,'2026-04-01','2026-04-01',2,1), (3,'invested',9000,'2026-05-30','2026-05-30',3,1),
       (4,'closed',100000,'2026-03-01','2026-03-01',4,1), (5,'closed',20000,'2026-03-10','2026-03-10',5,1), (6,'closed',5000,'2026-04-05','2026-04-05',6,1),
       (7,'closed',7000,'2026-01-01','2026-01-01',7,1), (8,'closed',6000,'2026-03-05','2026-03-05',8,1), (9,'invested',6000,'2026-09-01','2026-09-01',8,1),
       (10,'booked',12000,NULL,'2026-10-01',9,1), (11,'verifying',3000,NULL,'2026-10-12',9,1), (12,'booked',4000,NULL,'2026-09-01',10,1),
-      (13,'invested',5000,'2026-04-09','2026-04-09',2,1);
+      (13,'invested',5000,'2026-04-09','2026-04-09',2,1), (14,'closed',4000,NULL,'2026-03-01',11,1);
     INSERT INTO return_schedules (id, "orderId", "paymentDate") VALUES (1, 1, '2026-10-20');
     INSERT INTO deposits (id, "date", amount, "paymentMethod", status, "orderId") VALUES
       (1,'2026-03-01',500000,'bank_deposit','approved',4), (2,'2026-03-10',20000,'bank_deposit','approved',5),
@@ -63,9 +64,9 @@ describe('loadActionLists', () => {
   });
   it('cooling: last project matured 30-60 days ago, nothing running, richest first', async () => {
     const d = await loadActionLists(q, NOW, { maturingDays: 14, limit: 50 });
-    expect(d.cooling.rows.map((r) => [r.userId, r.daysSince, r.lifetimeValue])).toEqual([[4, 43, 500000], [5, 34, 20000]]);
+    expect(d.cooling.rows.map((r) => [r.userId, r.daysSince, r.lifetimeValue])).toEqual([[4, 43, 500000], [5, 34, 20000], [11, 43, 0]]);
     expect(d.cooling.rows[0]).toMatchObject({ lastProject: 'Dairy A', lastMaturity: '2026-09-01' });
-    expect(d.cooling.total).toBe(2);
+    expect(d.cooling.total).toBe(3);
     expect(d.cooling.amount).toBe(520000); // user 8 (also matured 39 days ago) is excluded: they have a running project
   });
   it('stuck bookings: open more than 3 days, investors only', async () => {

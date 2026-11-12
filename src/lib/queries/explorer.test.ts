@@ -39,6 +39,8 @@ beforeAll(async () => {
     INSERT INTO returns (id, "date", amount, status, "orderId") VALUES (1,'2026-10-07',300,'completed',3), (2,'2026-10-08',100,'initiated',1);
     INSERT INTO "order" (id, status, quantity, "totalAmount", "investmentDate", "createdAt", "userId", "productId") VALUES
       (8,'invested',1,8000,'2026-05-02','2026-05-02',1,1);
+    INSERT INTO "order" (id, status, quantity, "totalAmount", "investmentDate", "createdAt", "userId", "productId")
+      VALUES (9,'closed',1,6000,NULL,'2026-05-02',3,1);
     INSERT INTO return_schedules (id, "orderId", "paymentDate") VALUES
       (1,1,'2026-11-02'), (2,2,'2026-11-02');
     INSERT INTO returns (id, "date", amount, status, "orderId") VALUES
@@ -115,8 +117,9 @@ describe('loadExplorer', () => {
     const maturityParams = (from: string, to: string, extra = '') =>
       parseExplorerParams(new URLSearchParams(`t=maturities&p=custom&from=${from}&to=${to}&cmp=none&${extra}`), TODAY);
     const r = await loadExplorer(q, maturityParams('2026-11-02', '2026-11-02'));
-    expect(r.total).toBe(3);
+    expect(r.total).toBe(4);
     expect(r.rows.map((row) => [row.id, row.maturity, row.status])).toEqual([
+      [9, '2026-11-02', 'not_initiated'],
       [8, '2026-11-02', 'not_initiated'],
       [2, '2026-11-02', 'completed'],
       [1, '2026-11-02', 'initiated'],
@@ -126,7 +129,7 @@ describe('loadExplorer', () => {
     expect(r.columns.map((column) => column.key)).toEqual([
       'id', 'maturity', 'investor', 'phone', 'project', 'amount', 'returnAmount', 'returnDate', 'status',
     ]);
-    expect((await loadExplorer(q, maturityParams('2026-11-02', '2026-11-02', 'st=not_initiated'))).rows.map((row) => row.id)).toEqual([8]);
+    expect((await loadExplorer(q, maturityParams('2026-11-02', '2026-11-02', 'st=not_initiated'))).rows.map((row) => row.id)).toEqual([9, 8]);
     expect((await loadExplorer(q, maturityParams('2026-11-03', '2026-11-03'))).total).toBe(0);
   });
   it('matches each Explorer investor segment total to the Investors segment counts', async () => {

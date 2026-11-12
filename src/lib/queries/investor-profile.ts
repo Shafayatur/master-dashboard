@@ -94,7 +94,7 @@ const ORD = (userParam: string) => `sched AS (
   SELECT "orderId", MAX("paymentDate") AS last_pay FROM return_schedules WHERE "deletedAt" IS NULL GROUP BY 1
 ), ord AS (
   SELECT o.id AS order_id, o."userId", o.status::text AS status, o."totalAmount" AS amount, p.name AS project,
-    COALESCE(s.last_pay, o."investmentDate" + (split_part(p."productDuration"::text, ' ', 1)::int * interval '1 month')) AS maturity
+    COALESCE(s.last_pay, COALESCE(o."investmentDate", o."createdAt") + (split_part(p."productDuration"::text, ' ', 1)::int * interval '1 month')) AS maturity
   FROM "order" o JOIN products p ON p.id = o."productId" LEFT JOIN sched s ON s."orderId" = o.id
   WHERE o."deletedAt" IS NULL AND o."userId" = ${userParam} AND o.status::text IN ('invested', 'closed')
 )`;
@@ -154,7 +154,7 @@ FROM returns r JOIN "order" o ON o.id = r."orderId" AND o."deletedAt" IS NULL AN
 SELECT o.id AS order_id, p.name AS project, o.status::text AS status, o."totalAmount"::float8 AS amount,
   ${dhaka('o."createdAt"')} AS created, ${dhaka('o."investmentDate"')} AS investment_date,
   CASE WHEN o.status::text IN ('invested', 'closed')
-    THEN ${dhaka(`COALESCE(s.last_pay, o."investmentDate" + (split_part(p."productDuration"::text, ' ', 1)::int * interval '1 month'))`)} END AS maturity,
+    THEN ${dhaka(`COALESCE(s.last_pay, COALESCE(o."investmentDate", o."createdAt") + (split_part(p."productDuration"::text, ' ', 1)::int * interval '1 month'))`)} END AS maturity,
   split_part(p."productDuration"::text, ' ', 1)::int AS months
 FROM "order" o JOIN products p ON p.id = o."productId" LEFT JOIN sched s ON s."orderId" = o.id
 WHERE o."deletedAt" IS NULL AND o."userId" = $1::int ORDER BY o."createdAt" DESC, o.id DESC LIMIT ${LIST_LIMIT}`,
