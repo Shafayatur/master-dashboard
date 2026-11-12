@@ -187,11 +187,14 @@ it('filters Explorer rows by new and returning investors', async () => {
   await db.exec(`
     INSERT INTO "user" (id, name, phone, email, "createdAt", "userType") VALUES
       (20,'Prospect','01711000020','p@example.com','2026-10-04','investor'),
-      (21,'Returning Investor','01711000021','r@example.com','2026-01-05','investor');
+      (21,'Returning Investor','01711000021','r@example.com','2026-01-05','investor'),
+      (22,'New Lifetime Investor','01711000022','n@example.com','2022-01-05','investor');
     INSERT INTO "order" (id, status, quantity, "totalAmount", "investmentDate", "createdAt", "userId", "productId")
-      VALUES (21,'invested',1,1000,'2026-01-06','2026-01-06',21,1);
+      VALUES (21,'invested',1,1000,'2026-01-06','2026-01-06',21,1),
+        (22,'invested',1,1000,'2022-01-06','2022-01-06',22,1);
     INSERT INTO deposits (id, "date", amount, "paymentMethod", status, "orderId") VALUES
-      (20,'2026-01-06',500,'cash','approved',21), (21,'2026-10-05',500,'cash','approved',21);
+      (20,'2026-01-06',500,'cash','approved',21), (21,'2026-10-05',500,'cash','approved',21),
+      (22,'2020-12-30',500,'cash','approved',21), (23,'2022-01-06',500,'cash','approved',22);
   `);
 
   const newInvestors = await loadExplorer(q, params('t=investors&ik=new'));
@@ -200,6 +203,17 @@ it('filters Explorer rows by new and returning investors', async () => {
 
   const returningInvestors = await loadExplorer(q, params('t=investors&ik=old'));
   expect(returningInvestors.rows.map((row) => row.id)).toEqual([21]);
+
+  for (const kind of ['old', 'new'] as const) {
+    const lifetimeSegmentFilters = parseExplorerParams(
+      new URLSearchParams(`t=investors&p=lifetime&seg=active&ik=${kind}`),
+      TODAY,
+    );
+    const result = await loadExplorer(q, lifetimeSegmentFilters);
+    if (kind === 'old') expect(result.rows.map((row) => row.id)).toEqual([21]);
+    else expect(result.rows.map((row) => row.id)).toContain(22);
+    expect(result.rows.every((row) => row.segment === 'active')).toBe(true);
+  }
 
   expect((await loadExplorer(q, params('t=deposits&ik=new'))).rows.map((row) => row.id)).toEqual([3, 2, 1]);
   expect((await loadExplorer(q, params('t=deposits&ik=old'))).rows.map((row) => row.id)).toEqual([21]);

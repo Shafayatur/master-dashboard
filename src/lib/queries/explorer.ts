@@ -261,12 +261,13 @@ function build(params: ExplorerParams, now: Date) {
     ? `${baseFrom} ${investorFirstDepJoin}`
     : baseFrom;
   const { start, end } = utcBounds(params.range);
+  const hasInvestorKind = params.filters.investorKind !== 'all';
   const isAllTimeSegmentDrilldown = params.table === 'investors'
     && params.segments.length > 0
+    && !hasInvestorKind
     && (params.range.preset === 'lifetime' || params.range.from <= '2021-01-01');
   const startTs = isAllTimeSegmentDrilldown ? '' : `${p.add(start)}::timestamp`;
   const endTs = `${p.add(end)}::timestamp`;
-  const hasInvestorKind = params.filters.investorKind !== 'all';
   const dateConds = params.table === 'investors' && hasInvestorKind && !isAllTimeSegmentDrilldown
     ? [`EXISTS (SELECT 1 FROM deposits d_range JOIN "order" o_range ON o_range.id = d_range."orderId" AND o_range."deletedAt" IS NULL WHERE o_range."userId" = u.id AND d_range."deletedAt" IS NULL AND d_range.status::text = 'approved' AND d_range."date" >= ${startTs} AND d_range."date" < ${endTs})`]
     : isAllTimeSegmentDrilldown
