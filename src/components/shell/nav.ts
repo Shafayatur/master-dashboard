@@ -13,7 +13,7 @@ export const NAV: NavItem[] = [
   { href: '/sales', label: 'Sales', icon: TrendingUp, phase: 2 },
   { href: '/projects', label: 'Projects & Tenure', icon: Boxes, phase: 2 },
   { href: '/investors', label: 'Investors', icon: Users, phase: 3 },
-  { href: '/money-flow', label: 'Money Flow', icon: ArrowLeftRight, phase: 4 },
+  { href: '/money-flow', label: 'Cashflow', icon: ArrowLeftRight, phase: 4 },
   { href: '/actions', label: 'Action Lists', icon: ListChecks, phase: 4 },
   { href: '/targets', label: 'Targets', icon: Target, phase: 4 },
   { href: '/explorer', label: 'Data Explorer', icon: Table2, phase: 5 },

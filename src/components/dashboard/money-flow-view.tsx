@@ -173,13 +173,13 @@ export function MoneyFlowView({ data, unit, filters }: Props) {
     <div className="space-y-5">
       <div className="relative z-40 flex flex-wrap items-end justify-between gap-3 animate-rise">
         <div>
-          <h2 className="text-xl font-semibold tracking-tight">Money Flow</h2>
+          <h2 className="text-xl font-semibold tracking-tight">Cashflow</h2>
           <p className="mt-1 text-sm text-muted">Live cash flow, payouts and upcoming maturity schedule.</p>
         </div>
         <PageTools generatedAt={data.generatedAt} unit={unit} />
         <div className="flex flex-wrap items-center gap-1 print:hidden">
           <span className="mr-1 text-xs font-medium text-muted">Period:</span>
-          <nav className="flex flex-wrap gap-1 rounded-lg border border-line p-0.5" aria-label="Money Flow period">
+          <nav className="flex flex-wrap gap-1 rounded-lg border border-line p-0.5" aria-label="Cashflow period">
             {MONEY_FLOW_PERIODS.map(({ preset, label }) => (
               <Link
                 key={preset}

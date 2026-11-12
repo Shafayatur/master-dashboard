@@ -5,7 +5,7 @@ const TITLES: Record<ListKey, string> = {
   maturing: 'Maturing soon',
   overdue: 'Overdue: status needs update',
   cooling: 'Cooling investors',
-  stuck: 'Stuck bookings',
+  stuck: 'Booked but not Invested',
   pending: 'Pending deposits',
 };
 

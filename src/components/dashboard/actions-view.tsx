@@ -57,7 +57,7 @@ export function ActionsView({
       ? [{ label: 'Overdue: status needs update', total: data.overdue.total, amount: data.overdue.amount, icon: AlertTriangle, tone: 'rose' as const }]
       : []),
     { label: 'Cooling investors', total: data.cooling.total, amount: data.cooling.amount, icon: Snowflake, tone: 'amber' as const },
-    { label: 'Stuck bookings', total: data.stuck.total, amount: data.stuck.amount, icon: Clock, tone: 'violet' as const },
+    { label: 'Booked but not Invested', total: data.stuck.total, amount: data.stuck.amount, icon: Clock, tone: 'violet' as const },
     { label: 'Pending deposits', total: data.pending.total, amount: data.pending.amount, icon: Hourglass, tone: 'rose' as const },
   ];
 
@@ -182,7 +182,7 @@ export function ActionsView({
           emptyText="No cooling investors right now."
         />
         <ActionListCard
-          title="Stuck bookings"
+          title="Booked but not Invested"
           description="Booked or verifying for more than 3 days without becoming an investment."
           total={data.stuck.total}
           amountLabel={`Booked amount: ${formatMoney(data.stuck.amount, unit)}`}

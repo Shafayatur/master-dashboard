@@ -9,7 +9,7 @@ import { MONEY_UNIT_COOKIE, parseMoneyUnit, type MoneyUnit } from '@/lib/format/
 import { getMoneyFlow } from '@/lib/queries/money-flow-page';
 import { todayDhaka } from '@/lib/time';
 
-export const metadata: Metadata = { title: 'Money Flow' };
+export const metadata: Metadata = { title: 'Cashflow' };
 
 async function Loaded({ filters, today, unit }: { filters: Filters; today: string; unit: MoneyUnit }) {
   const data = await getMoneyFlow(filters, today);

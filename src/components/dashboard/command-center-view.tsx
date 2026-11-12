@@ -163,7 +163,7 @@ function Attention({ data, unit }: { data: CommandCenterData; unit: MoneyUnit })
   const a = data.attention;
   const tiles = [
     { Icon: Hourglass, label: 'Deposits awaiting approval', n: a.pendingDeposits.count, sub: formatMoney(a.pendingDeposits.amount, unit) },
-    { Icon: Clock, label: `Bookings open over ${a.stuckBookings.olderThanDays} days`, n: a.stuckBookings.count, sub: 'not yet invested' },
+    { Icon: Clock, label: 'Booked but not Invested', n: a.stuckBookings.count, sub: `open over ${a.stuckBookings.olderThanDays} days` },
     { Icon: Send, label: 'Payouts in flight', n: a.payoutsInFlight.count, sub: formatMoney(a.payoutsInFlight.amount, unit) },
     { Icon: CalendarClock, label: `Maturing in ${a.maturingSoon.withinDays} days`, n: a.maturingSoon.count, sub: formatMoney(a.maturingSoon.amount, unit) },
   ];
