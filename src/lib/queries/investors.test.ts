@@ -21,11 +21,14 @@ beforeAll(async () => {
   await db.exec(`
     INSERT INTO "user" (id, "createdAt", "userType") VALUES
       (1,'2026-09-10','investor'),(2,'2026-09-20','investor'),(3,'2026-09-25','investor'),(4,'2026-08-05','investor'),
-      (5,'2026-10-02','investor'),(6,'2026-10-03','investor'),(7,'2026-08-20','investor'),(8,'2026-09-01','internal-staff');
+      (5,'2026-10-02','investor'),(6,'2026-10-03','investor'),(7,'2026-08-20','investor'),(8,'2026-09-01','internal-staff'),
+      (9,'2026-09-15','investor');
     INSERT INTO products (id, name, "productDuration") VALUES (1, 'A', '6 Months');
     INSERT INTO "order" (id, status, "investmentDate", "userId", "productId") VALUES
       (1,'invested','2026-09-12',1,1), (2,'closed','2026-04-01',2,1), (3,'closed','2026-03-01',3,1),
-      (4,'closed','2026-01-01',4,1), (5,'cancelled','2026-10-04',6,1), (6,'invested','2026-10-05',7,1), (7,'closed','2026-01-05',7,1);
+      (4,'closed','2026-01-01',4,1), (5,'cancelled','2026-10-04',6,1), (6,'invested','2026-10-05',7,1), (7,'closed','2026-01-05',7,1),
+      (8,'invested',NULL,9,1);
+    UPDATE "order" SET "createdAt" = '2026-09-12' WHERE id = 8;
     INSERT INTO return_schedules (id, "orderId", "paymentDate") VALUES (1,2,'2026-09-01'), (2,2,'2026-10-01');
     INSERT INTO deposits (id, "date", amount, status, "orderId") VALUES
       (1,'2026-09-12',10000,'approved',1), (2,'2026-10-10',20000,'approved',2), (3,'2026-09-27',3000,'approved',3),
@@ -38,9 +41,9 @@ describe('segments', () => {
   it('classifies by running project, then by how long ago the last project matured', async () => {
     const rows = await segments(q, NOW);
     const n = Object.fromEntries(rows.map((r) => [r.key, r.investors]));
-    // u1 and u7 have running projects; u2 matured 13d ago; u3 (no schedule, 1 Mar + 6 months) 43d; u4 105d; u5 and u6 never invested
-    expect(n).toEqual({ active: 2, recently_active: 1, cooling: 1, inactive: 1, prospect: 2 });
-    expect(rows.find((r) => r.key === 'active')).toMatchObject({ lifetimeValue: 2010000, avgLifetimeValue: 1005000 });
+    // u1, u7 and u9 have running projects; u2 matured 13d ago; u3 (no schedule, 1 Mar + 6 months) 43d; u4 105d; u5 and u6 never invested
+    expect(n).toEqual({ active: 3, recently_active: 1, cooling: 1, inactive: 1, prospect: 2 });
+    expect(rows.find((r) => r.key === 'active')).toMatchObject({ lifetimeValue: 2010000, avgLifetimeValue: 670000 });
     expect(rows.reduce((s, r) => s + r.share, 0)).toBeCloseTo(100);
   });
   it('respects custom thresholds', async () => {
@@ -70,7 +73,7 @@ describe('cohorts', () => {
     expect(c).toHaveLength(12);
     expect(c[0]?.month).toBe('2025-11-01');
     expect(c.find((x) => x.month === '2026-08-01')).toMatchObject({ registered: 2, d7: 1, d30: 1, d90: 2, ever: 2, complete30: true, complete90: false });
-    expect(c.find((x) => x.month === '2026-09-01')).toMatchObject({ registered: 3, d7: 2, d30: 3, ever: 3, complete7: true, complete30: false });
+    expect(c.find((x) => x.month === '2026-09-01')).toMatchObject({ registered: 4, d7: 2, d30: 3, ever: 3, complete7: true, complete30: false });
     expect(c.find((x) => x.month === '2026-10-01')).toMatchObject({ registered: 2, ever: 0, complete7: false });
   });
   it('median days from registration to first approved deposit', async () => {
@@ -81,7 +84,7 @@ describe('cohorts', () => {
 describe('loadInvestors and insights', () => {
   it('returns plain JSON with the investor total', async () => {
     const d = await loadInvestors(q, TODAY, NOW);
-    expect(d.totalInvestors).toBe(7);
+    expect(d.totalInvestors).toBe(8);
     expect(JSON.parse(JSON.stringify(d))).toEqual(d);
     const texts = buildInvestorInsights(d, 'm').map((i) => i.text);
     expect(texts.some((t) => t.includes('1 investors are cooling'))).toBe(true);

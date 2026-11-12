@@ -17,11 +17,11 @@ const q: QueryFn = async (sql, params = []) => {
 const NOW = new Date('2026-10-14T00:00:00Z');
 const TODAY = '2026-10-14';
 const EXPECTED = new Map<number, string>([
-  [101, 'cooling'],
+  [101, 'active'],
   [102, 'active'],
   [103, 'recently_active'],
   [104, 'prospect'],
-  [105, 'inactive'],
+  [105, 'active'],
 ]);
 
 beforeAll(async () => {
@@ -55,10 +55,10 @@ describe('investor segment parity', () => {
     const aggregate = await segments(q, NOW);
     expect(aggregate.map(({ key }) => key)).toEqual(SEGMENT_ORDER);
     expect(Object.fromEntries(aggregate.map(({ key, investors }) => [key, investors]))).toEqual({
-      active: 1,
+      active: 3,
       recently_active: 1,
-      cooling: 1,
-      inactive: 1,
+      cooling: 0,
+      inactive: 0,
       prospect: 1,
     });
 
@@ -80,6 +80,6 @@ describe('investor segment parity', () => {
       expect(profileSegments.get(userId)).toBe(expected);
       expect(coolingIds.has(userId)).toBe(expected === 'cooling');
     }
-    expect(actions.cooling.rows.map(({ userId, daysSince }) => [userId, daysSince])).toEqual([[101, 40]]);
+    expect(actions.cooling.rows.map(({ userId, daysSince }) => [userId, daysSince])).toEqual([]);
   });
 });

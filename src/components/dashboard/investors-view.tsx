@@ -182,10 +182,13 @@ export function InvestorsView({ data, extras, unit, search, today }: Props) {
                 <DonutLegend
                   slices={segments}
                   format="value"
-                  valueText={(key) => formatMoney(segmentByKey.get(key as SegmentKey)?.avgLifetimeValue ?? 0, unit)}
+                  valueText={(key) => {
+                    const seg = segmentByKey.get(key as SegmentKey);
+                    return seg ? `${formatInt(seg.investors)} · ${formatMoney(seg.avgLifetimeValue, unit)}` : '0';
+                  }}
                 />
               </div>
-              <p className="mt-2 text-xs text-muted">Average lifetime value · share of investors</p>
+              <p className="mt-2 text-xs text-muted">Investors · average lifetime value · share of investors</p>
             </ChartCard>
 
             <ChartCard

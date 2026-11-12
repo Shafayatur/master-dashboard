@@ -319,7 +319,7 @@ describe('loadHome: investors', () => {
       ['prospect', 2, 25], // Eve, Gus
     ]);
     expect(d.segments.find((s) => s.key === 'active')?.lifetimeValue).toBe(42500);
-    expect(d.segments.find((s) => s.key === 'recently_active')?.lifetimeValue).toBe(23376);
+    expect(d.segments.find((s) => s.key === 'recently_active')?.lifetimeValue).toBe(16376);
   });
 
   it('investorTotals: all-time registered, ever invested, active', async () => {

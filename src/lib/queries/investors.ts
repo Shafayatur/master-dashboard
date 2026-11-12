@@ -70,6 +70,12 @@ const LTV = `ltv AS (
   FROM deposits d JOIN "order" o ON o.id = d."orderId" AND o."deletedAt" IS NULL
   WHERE d."deletedAt" IS NULL AND d.status::text = 'approved' GROUP BY o."userId"
 )`;
+const SEGMENT_LTV = `ltv AS (
+  SELECT o."userId", SUM(d.amount) AS ltv
+  FROM deposits d JOIN "order" o ON o.id = d."orderId" AND o."deletedAt" IS NULL
+  WHERE d."deletedAt" IS NULL AND d.status::text = 'approved' AND o.status::text IN ('invested', 'closed')
+  GROUP BY o."userId"
+)`;
 const INVESTOR = `u."deletedAt" IS NULL AND u."userType"::text = 'investor'`;
 
 /**
@@ -86,10 +92,10 @@ export async function segments(q: QueryFn, now: Date, t: Thresholds = DEFAULT_TH
   SELECT "orderId", MAX("paymentDate") AS last_pay FROM return_schedules WHERE "deletedAt" IS NULL GROUP BY 1
 ), ord AS (
   SELECT o."userId", o.status::text AS status,
-    COALESCE(s.last_pay, o."investmentDate" + (split_part(p."productDuration"::text, ' ', 1)::int * interval '1 month')) AS maturity
+    COALESCE(s.last_pay, COALESCE(o."investmentDate", o."createdAt") + (split_part(p."productDuration"::text, ' ', 1)::int * interval '1 month')) AS maturity
   FROM "order" o JOIN products p ON p.id = o."productId" LEFT JOIN sched s ON s."orderId" = o.id
   WHERE o."deletedAt" IS NULL AND o.status::text IN ('invested', 'closed')
-), ${perInvestorCte(nowTs)}, ${LTV}
+), ${perInvestorCte(nowTs)}, ${SEGMENT_LTV}
 SELECT seg, COUNT(*)::int AS investors, COALESCE(SUM(v), 0)::float8 AS lifetime_value FROM (
   SELECT COALESCE(l.ltv, 0) AS v, ${segmentCase(nowTs, recent, cooling)} AS seg
   FROM per LEFT JOIN ltv l ON l."userId" = per.user_id

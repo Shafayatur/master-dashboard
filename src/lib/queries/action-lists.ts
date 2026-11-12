@@ -153,7 +153,7 @@ ORDER BY days_overdue DESC, ord.order_id DESC LIMIT $5::int`,
 async function cooling(q: QueryFn, now: string, limit: number) {
   const { recentlyActiveDays, coolingDays } = DEFAULT_THRESHOLDS;
   const rows = await q(
-    `WITH ${ORD}, active AS (SELECT DISTINCT "userId" FROM ord WHERE status = 'invested' AND maturity >= $1::timestamp),
+    `WITH ${ORD}, active AS (SELECT DISTINCT "userId" FROM ord WHERE status = 'invested'),
 lc AS (SELECT DISTINCT ON ("userId") "userId", maturity, project FROM ord
   WHERE status = 'closed' OR maturity < $1::timestamp ORDER BY "userId", maturity DESC)
 SELECT ${WHO}, lc.project AS last_project, to_char(lc.maturity + interval '6 hours', 'YYYY-MM-DD') AS last_maturity,

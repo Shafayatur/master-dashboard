@@ -133,10 +133,11 @@ describe('loadExplorer', () => {
     await db.exec(`
       INSERT INTO "user" (id, "createdAt", "userType") VALUES
         (10,'2025-01-01','investor'), (11,'2025-01-01','investor'), (12,'2025-01-01','investor'),
-        (13,'2025-01-01','investor'), (14,'2025-01-01','investor');
+        (13,'2025-01-01','investor'), (14,'2025-01-01','investor'), (15,NULL,'investor');
       INSERT INTO "order" (id, status, "investmentDate", "userId", "productId") VALUES
         (10,'invested','2025-01-01',10,1), (11,'closed','2025-01-01',11,1), (12,'closed','2025-01-01',12,1),
-        (13,'closed','2025-01-01',13,1), (14,'booked','2025-01-01',14,1);
+        (13,'closed','2025-01-01',13,1), (14,'booked','2025-01-01',14,1), (15,'invested',NULL,15,1);
+      UPDATE "order" SET "createdAt" = '2025-01-01' WHERE id = 15;
       INSERT INTO return_schedules (id, "orderId", "paymentDate") VALUES
         (10,11,CURRENT_TIMESTAMP - interval '10 days'),
         (11,12,CURRENT_TIMESTAMP - interval '45 days'),
@@ -153,6 +154,11 @@ describe('loadExplorer', () => {
       expect(result.total).toBe(row.investors);
       expect(result.rows.every((investor) => investor.segment === row.key)).toBe(true);
     }
+    const active = await loadExplorer(q, parseExplorerParams(
+      new URLSearchParams(`t=investors&seg=active&p=custom&from=2015-01-01&to=${TODAY}`),
+      TODAY,
+    ));
+    expect(active.rows.some((investor) => investor.id === 15)).toBe(true);
   });
   it('paginates and reports the true total', async () => {
     const r = await loadExplorer(q, params('t=deposits&page=2'));

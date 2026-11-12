@@ -69,7 +69,7 @@ const investorSegmentJoin = (nowTs: string, recent: string, cooling: string) => 
     SELECT "orderId", MAX("paymentDate") AS last_pay FROM return_schedules WHERE "deletedAt" IS NULL GROUP BY 1
   ), ord AS (
     SELECT o."userId", o.status::text AS status,
-      COALESCE(s.last_pay, o."investmentDate" + (split_part(p."productDuration"::text, ' ', 1)::int * interval '1 month')) AS maturity
+      COALESCE(s.last_pay, COALESCE(o."investmentDate", o."createdAt") + (split_part(p."productDuration"::text, ' ', 1)::int * interval '1 month')) AS maturity
     FROM "order" o JOIN products p ON p.id = o."productId" LEFT JOIN sched s ON s."orderId" = o.id
     WHERE o."deletedAt" IS NULL AND o.status::text IN ('invested','closed')
   ), ${perInvestorCte(nowTs)}
@@ -261,11 +261,16 @@ function build(params: ExplorerParams, now: Date) {
     ? `${baseFrom} ${investorFirstDepJoin}`
     : baseFrom;
   const { start, end } = utcBounds(params.range);
-  const startTs = `${p.add(start)}::timestamp`;
+  const allTimeInvestorSegment = params.table === 'investors'
+    && params.segments.length > 0
+    && params.range.from <= '2015-01-01';
+  const startTs = allTimeInvestorSegment ? '' : `${p.add(start)}::timestamp`;
   const endTs = `${p.add(end)}::timestamp`;
   const hasInvestorKind = params.filters.investorKind !== 'all';
-  const dateConds = params.table === 'investors' && hasInvestorKind
+  const dateConds = params.table === 'investors' && hasInvestorKind && !allTimeInvestorSegment
     ? [`EXISTS (SELECT 1 FROM deposits d_range JOIN "order" o_range ON o_range.id = d_range."orderId" AND o_range."deletedAt" IS NULL WHERE o_range."userId" = u.id AND d_range."deletedAt" IS NULL AND d_range.status::text = 'approved' AND d_range."date" >= ${startTs} AND d_range."date" < ${endTs})`]
+    : allTimeInvestorSegment
+      ? [`(u."createdAt" IS NULL OR u."createdAt" < ${endTs})`]
     : [`${def.dateCol} >= ${startTs}`, `${def.dateCol} < ${endTs}`];
   const conds = [...def.where, ...dateConds];
   if (hasInvestorKind) {
