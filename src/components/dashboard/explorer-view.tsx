@@ -203,99 +203,107 @@ export function ExplorerView({ data, params, searchParams }: Props) {
         </div>
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
-        <p>
-          {formatInt(data.total)} records
-          {data.total > 0 && <span className="ml-2">Showing {formatInt(from)}-{formatInt(to)}</span>}
-        </p>
-        <div className="flex items-center gap-3">
-          <Link
-            href={href({ page: String(Math.max(1, data.page - 1)) })}
-            aria-disabled={data.page <= 1}
-            className={data.page <= 1 ? 'pointer-events-none opacity-50' : 'hover:text-fg'}
-          >
-            Previous
-          </Link>
-          <span>Page {formatInt(data.page)} of {formatInt(pages)}</span>
-          <Link
-            href={href({ page: String(Math.min(pages, data.page + 1)) })}
-            aria-disabled={data.page >= pages}
-            className={data.page >= pages ? 'pointer-events-none opacity-50' : 'hover:text-fg'}
-          >
-            Next
-          </Link>
-        </div>
-      </div>
-
-      <div className="min-w-0 overflow-x-auto rounded-xl border border-line bg-surface">
-        {data.rows.length === 0 ? (
-          <p className="p-4 text-sm text-muted">No records for these filters.</p>
-        ) : (
-          <table className="min-w-full text-sm">
-            <thead className="sticky top-0 bg-surface">
-              <tr className="border-b border-line">
-                {data.columns.map((column) => {
-                  const active = data.sort === column.key;
-                  const next = active && data.dir === 'desc' ? 'asc' : 'desc';
-                  const SortIcon = data.dir === 'asc' ? ArrowUp : ArrowDown;
-                  return (
-                    <th
-                      key={column.key}
-                      scope="col"
-                      className={`whitespace-nowrap px-3 py-2 font-medium text-muted ${
-                        column.kind === 'money' || column.kind === 'int' ? 'text-right' : 'text-left'
-                      }`}
-                    >
-                      <Link
-                        href={href({ sort: column.key, dir: next, page: '' })}
-                        className="inline-flex items-center gap-1 hover:text-fg"
-                      >
-                        {column.label}
-                        {active && <SortIcon className="h-3.5 w-3.5" aria-hidden />}
-                      </Link>
-                    </th>
-                  );
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {data.rows.map((row, rowIndex) => (
-                <tr key={`${String(row.id ?? rowIndex)}-${rowIndex}`} className="border-b border-line last:border-0">
+      <div className="overflow-hidden rounded-xl border border-line bg-surface">
+        <div className="overflow-x-auto">
+          {data.rows.length === 0 ? (
+            <p className="p-4 text-sm text-muted">No records for these filters.</p>
+          ) : (
+            <table className="min-w-full text-sm">
+              <thead className="sticky top-0 bg-surface">
+                <tr className="border-b border-line">
                   {data.columns.map((column) => {
-                    const value = row[column.key];
-                    const numeric = column.kind === 'money' || column.kind === 'int';
-                    const cellClass = `whitespace-nowrap px-3 py-2 ${
-                      numeric ? 'text-right tabular-nums' : 'text-left'
-                    }`;
-                    if (value === null || value === undefined || value === '') {
-                      return <td key={column.key} className={cellClass}>-</td>;
-                    }
-                    if (column.kind === 'status') {
-                      const status = String(value);
-                      return (
-                        <td key={column.key} className={cellClass}>
-                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusTone[status] ?? 'bg-line/60 text-muted'}`}>
-                            {status}
-                          </span>
-                        </td>
-                      );
-                    }
-                    let content: React.ReactNode = String(value);
-                    if (column.kind === 'int') content = formatInt(Number(value));
-                    if (column.kind === 'money') content = moneyFormatter.format(Number(value));
-                    if ((column.key === 'investor' || column.key === 'name') && typeof row.userId === 'number' && row.userId > 0) {
-                      content = (
-                        <Link href={`/investors/${row.userId}`} className="font-medium hover:underline">
-                          {String(value)}
+                    const active = data.sort === column.key;
+                    const next = active && data.dir === 'desc' ? 'asc' : 'desc';
+                    const SortIcon = data.dir === 'asc' ? ArrowUp : ArrowDown;
+                    return (
+                      <th
+                        key={column.key}
+                        scope="col"
+                        className={`whitespace-nowrap px-3 py-2 font-medium text-muted ${
+                          column.kind === 'money' || column.kind === 'int' ? 'text-right' : 'text-left'
+                        }`}
+                      >
+                        <Link
+                          href={href({ sort: column.key, dir: next, page: '' })}
+                          className="inline-flex items-center gap-1 hover:text-fg"
+                        >
+                          {column.label}
+                          {active && <SortIcon className="h-3.5 w-3.5" aria-hidden />}
                         </Link>
-                      );
-                    }
-                    return <td key={column.key} className={cellClass}>{content}</td>;
+                      </th>
+                    );
                   })}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {data.rows.map((row, rowIndex) => (
+                  <tr key={`${String(row.id ?? rowIndex)}-${rowIndex}`} className="border-b border-line last:border-0">
+                    {data.columns.map((column) => {
+                      const value = row[column.key];
+                      const numeric = column.kind === 'money' || column.kind === 'int';
+                      const cellClass = `whitespace-nowrap px-3 py-2 ${
+                        numeric ? 'text-right tabular-nums' : 'text-left'
+                      }`;
+                      if (value === null || value === undefined || value === '') {
+                        return <td key={column.key} className={cellClass}>-</td>;
+                      }
+                      if (column.kind === 'status') {
+                        const status = String(value);
+                        return (
+                          <td key={column.key} className={cellClass}>
+                            <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${statusTone[status] ?? 'bg-line/60 text-muted'}`}>
+                              {status}
+                            </span>
+                          </td>
+                        );
+                      }
+                      let content: React.ReactNode = String(value);
+                      if (column.kind === 'int') content = formatInt(Number(value));
+                      if (column.kind === 'money') content = moneyFormatter.format(Number(value));
+                      if ((column.key === 'investor' || column.key === 'name') && typeof row.userId === 'number' && row.userId > 0) {
+                        content = (
+                          <Link href={`/investors/${row.userId}`} className="font-medium hover:underline">
+                            {String(value)}
+                          </Link>
+                        );
+                      }
+                      return <td key={column.key} className={cellClass}>{content}</td>;
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+        {data.total > 0 && (
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-line bg-surface px-4 py-3 text-sm text-muted">
+            <p>
+              Showing {formatInt(from)}–{formatInt(to)} of {formatInt(data.total)} records
+            </p>
+            <div className="flex items-center gap-2">
+              <Link
+                href={href({ page: String(Math.max(1, data.page - 1)) })}
+                aria-disabled={data.page <= 1}
+                className={`rounded-md border border-line px-2.5 py-1 text-xs font-medium ${
+                  data.page <= 1 ? 'pointer-events-none opacity-40' : 'text-fg hover:bg-canvas'
+                }`}
+              >
+                Previous
+              </Link>
+              <span className="px-1 text-xs">
+                Page {formatInt(data.page)} of {formatInt(pages)}
+              </span>
+              <Link
+                href={href({ page: String(Math.min(pages, data.page + 1)) })}
+                aria-disabled={data.page >= pages}
+                className={`rounded-md border border-line px-2.5 py-1 text-xs font-medium ${
+                  data.page >= pages ? 'pointer-events-none opacity-40' : 'text-fg hover:bg-canvas'
+                }`}
+              >
+                Next
+              </Link>
+            </div>
+          </div>
         )}
       </div>
     </div>
