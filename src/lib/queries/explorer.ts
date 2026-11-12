@@ -250,13 +250,17 @@ const escapeLike = (s: string): string => s.replace(/[\\%_]/g, (c) => `\\${c}`);
 function build(params: ExplorerParams, now: Date) {
   const def = TABLES[params.table];
   const p = new Params();
-  const baseFrom = params.table === 'investors'
-    ? `"user" u ${investorSegmentJoin(
+  const needsInvestorSegmentJoin = params.table === 'investors' || params.segments.length > 0;
+  const segmentJoin = needsInvestorSegmentJoin
+    ? investorSegmentJoin(
         `${p.add(pgTs(now))}::timestamp`,
         `${p.add(DEFAULT_THRESHOLDS.recentlyActiveDays)}::int`,
         `${p.add(DEFAULT_THRESHOLDS.coolingDays)}::int`,
-      )}`
-    : def.from;
+      )
+    : '';
+  const baseFrom = params.table === 'investors'
+    ? `"user" u ${segmentJoin}`
+    : `${def.from} ${segmentJoin}`;
   const from = params.filters.investorKind !== 'all'
     ? `${baseFrom} ${investorFirstDepJoin}`
     : baseFrom;
@@ -281,12 +285,20 @@ function build(params: ExplorerParams, now: Date) {
   }
   if (def.statusCol && params.status.length) conds.push(`${def.statusCol} = ANY(${p.add(params.status)}::text[])`);
   if (params.search.length >= 2) conds.push(def.search(p.add(`%${escapeLike(params.search)}%`), p.add(params.search)));
+  const prodPreds = productPredicates({ ...params.filters, orderStatus: [] }, p);
   if (params.table !== 'investors') {
-    conds.push(...productPredicates({ ...params.filters, orderStatus: [] }, p));
+    conds.push(...prodPreds);
     if (params.table === 'deposits' && params.filters.paymentMethod.length) {
       conds.push(`d."paymentMethod"::text = ANY(${p.add(params.filters.paymentMethod)}::text[])`);
     }
-  } else if (params.segments.length) {
+  } else if (prodPreds.length) {
+    conds.push(`EXISTS (
+      SELECT 1 FROM "order" o JOIN products p ON p.id = o."productId"
+      WHERE o."userId" = u.id AND o."deletedAt" IS NULL AND o.status::text IN ('invested', 'closed')
+        AND ${prodPreds.join(' AND ')}
+    )`);
+  }
+  if (params.segments.length) {
     conds.push(`sg.seg = ANY(${p.add(params.segments)}::text[])`);
   }
   const select = [...def.columns.map((c) => `${c.sql} AS "${c.key}"`), `${params.table === 'investors' ? 'u.id' : 'u.id'} AS "userId"`].join(',\n  ');

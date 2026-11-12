@@ -24,7 +24,8 @@ beforeAll(async () => {
       (3,'Old Timer','01711000003','o@example.com','2026-01-05','investor'), (4,'Staff','01711000004','s@example.com','2026-10-03','internal-staff');
     INSERT INTO "user" (id, name, phone, email, "createdAt", "deletedAt", "userType")
       VALUES (5,'Deleted Investor','01711000005','d@example.com','2026-10-05','2026-10-06','investor');
-    INSERT INTO products (id, name, "productDuration") VALUES (1,'Dairy A','6 Months'), (2,'Poultry B','12 Months');
+    INSERT INTO products (id, name, "productDuration", "productReturnType", "isShariah") VALUES
+      (1,'Dairy A','6 Months','percentage',FALSE), (2,'Poultry B','12 Months','fixed',TRUE);
     INSERT INTO categories (id, name) VALUES (1,'Dairy'), (2,'Poultry');
     INSERT INTO category_products ("categoriesId", "productsId") VALUES (1,1), (2,2);
     INSERT INTO "order" (id, status, quantity, "totalAmount", "investmentDate", "createdAt", "userId", "productId") VALUES
@@ -112,6 +113,19 @@ describe('loadExplorer', () => {
     expect((await loadExplorer(q, params('t=orders&prod=2'))).rows.map((row) => row.id)).toEqual([2]);
     expect((await loadExplorer(q, params('t=orders&os=cancelled'))).total).toBe(3);
     expect((await loadExplorer(q, params('t=payouts&prod=2'))).total).toBe(0);
+  });
+  it('filters investors by product, category, tenure, return type, and shariah product predicates', async () => {
+    for (const filter of ['prod=2', 'cat=2', 'ten=12', 'rt=fixed', 'sh=yes']) {
+      const result = await loadExplorer(q, params(`t=investors&${filter}`));
+      expect(result.rows.map((row) => row.id), filter).toEqual([2]);
+    }
+  });
+  it('applies segment filters to deposit and order rows', async () => {
+    const deposits = await loadExplorer(q, params('t=deposits&seg=active'));
+    expect(deposits.rows.map((row) => row.id)).toEqual([3, 2, 1]);
+
+    const orders = await loadExplorer(q, params('t=orders&seg=active'));
+    expect(orders.rows.map((row) => row.id)).toEqual([4, 2, 1]);
   });
   it('maturities: filters by the selected Dhaka maturity date and summarizes return status', async () => {
     const maturityParams = (from: string, to: string, extra = '') =>
