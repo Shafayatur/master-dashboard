@@ -95,7 +95,9 @@ export function ActionsView({
               href={`/actions?days=${days}`}
               aria-current={data.maturingDays === days ? 'page' : undefined}
               className={`px-2.5 py-1 text-xs font-medium transition-colors ${
-                data.maturingDays === days ? 'bg-ink text-ink-fg' : 'text-muted hover:text-fg'
+                data.maturingDays === days && !maturityRange
+                  ? 'bg-ink text-white dark:bg-emerald-600 dark:text-white'
+                  : 'text-muted hover:text-fg'
               }`}
             >
               {days}

@@ -105,6 +105,7 @@ function DatePicker({ filters, update }: { filters: Filters; update: (p: FilterP
   const valid = isValidYmd(from) && isValidYmd(to);
   return (
     <Popover
+      active={filters.preset !== 'mtd'}
       label={
         <>
           <CalendarDays className="h-4 w-4 text-muted" aria-hidden />
@@ -125,7 +126,10 @@ function DatePicker({ filters, update }: { filters: Filters; update: (p: FilterP
                     update({ date: { preset: p } });
                     close();
                   }}
-                  className={cn('w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-canvas', filters.preset === p && 'bg-canvas font-medium')}
+                  className={cn(
+                    'w-full rounded-md px-2 py-1.5 text-left text-sm',
+                    filters.preset === p ? 'bg-ink font-medium text-white dark:bg-emerald-600 dark:text-white' : 'hover:bg-canvas',
+                  )}
                 >
                   {PRESET_LABELS[p]}
                 </button>

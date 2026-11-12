@@ -117,7 +117,7 @@ export function ExplorerView({ data, params, searchParams }: Props) {
             key={table}
             href={href({ t: table, page: '', sort: '', dir: '', st: '' })}
             className={`rounded-md px-3 py-1.5 text-sm ${
-              params.table === table ? 'bg-ink text-ink-fg' : 'text-muted hover:text-fg'
+              params.table === table ? 'bg-ink text-white dark:bg-emerald-600 dark:text-white' : 'text-muted hover:text-fg'
             }`}
             aria-current={params.table === table ? 'page' : undefined}
           >

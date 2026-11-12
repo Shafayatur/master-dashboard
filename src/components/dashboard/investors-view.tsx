@@ -63,7 +63,7 @@ function SegmentedButtons<T extends string | number>({
           onClick={() => onChange(option.value)}
           className={cn(
             'px-2 py-1.5 text-xs font-medium transition-colors',
-            value === option.value ? 'bg-ink text-ink-fg' : 'text-muted hover:text-fg',
+            value === option.value ? 'bg-ink text-white dark:bg-emerald-600 dark:text-white' : 'text-muted hover:text-fg',
           )}
         >
           {option.label}
@@ -281,7 +281,7 @@ export function InvestorsView({ data, extras, unit, search, today }: Props) {
                     aria-current={registrationPreset === preset ? 'page' : undefined}
                     className={cn(
                       'rounded px-2 py-1 text-xs font-medium transition-colors',
-                      registrationPreset === preset ? 'bg-ink text-ink-fg' : 'text-muted hover:text-fg',
+                      registrationPreset === preset ? 'bg-ink text-white dark:bg-emerald-600 dark:text-white' : 'text-muted hover:text-fg',
                     )}
                   >
                     {label}

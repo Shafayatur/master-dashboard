@@ -70,7 +70,7 @@ export function TargetsView({ data, unit }: { data: TargetsOverview; unit: Money
                   onClick={() => setMonthsWindow(months)}
                   className={cn(
                     'px-2 py-1.5 text-xs font-medium transition-colors',
-                    monthsWindow === months ? 'bg-ink text-ink-fg' : 'text-muted hover:text-fg',
+                    monthsWindow === months ? 'bg-ink text-white dark:bg-emerald-600 dark:text-white' : 'text-muted hover:text-fg',
                   )}
                 >
                   {months}M

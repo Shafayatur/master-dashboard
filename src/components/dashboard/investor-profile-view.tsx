@@ -230,7 +230,7 @@ export function InvestorProfileView({ p, unit }: Props) {
                 }
               }}
               className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 ${
-                activeTab === tab.id ? 'bg-line font-medium text-fg' : 'text-muted hover:text-fg'
+                activeTab === tab.id ? 'bg-ink text-white dark:bg-emerald-600 dark:text-white' : 'text-muted hover:text-fg'
               }`}
             >
               {tab.label}

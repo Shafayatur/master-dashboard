@@ -39,6 +39,7 @@ function InlineDateRangePopoverContent({
 
   return (
     <Popover
+      active={isCustomActive}
       label={
         <>
           <CalendarRange className="h-3.5 w-3.5" aria-hidden />
@@ -47,7 +48,7 @@ function InlineDateRangePopoverContent({
       }
       ariaLabel={isCustomActive ? `Custom date range: ${formatRange({ from: initialFrom, to: initialTo })}` : 'Choose custom date range'}
       align={align}
-      className={cn(isCustomActive && 'bg-surface text-fg font-medium shadow-sm')}
+      className={cn(isCustomActive && 'font-medium shadow-sm')}
       panelClassName="w-64 space-y-3 p-3"
     >
       {(close) => (

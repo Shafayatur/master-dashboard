@@ -73,7 +73,7 @@ function SegmentedButtons<T extends string | number>({
           onClick={() => onChange(option.value)}
           className={cn(
             'px-2 py-1.5 text-xs font-medium transition-colors',
-            (isSelected ? isSelected(option.value) : value === option.value) ? 'bg-ink text-ink-fg' : 'text-muted hover:text-fg',
+            (isSelected ? isSelected(option.value) : value === option.value) ? 'bg-ink text-white dark:bg-emerald-600 dark:text-white' : 'text-muted hover:text-fg',
           )}
         >
           {option.label}
@@ -187,7 +187,7 @@ export function MoneyFlowView({ data, unit, filters }: Props) {
                 aria-current={filters.preset === preset ? 'page' : undefined}
                 className={cn(
                   'rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors',
-                  filters.preset === preset ? 'bg-ink text-ink-fg' : 'text-muted hover:text-fg',
+                  filters.preset === preset ? 'bg-ink text-white dark:bg-emerald-600 dark:text-white' : 'text-muted hover:text-fg',
                 )}
               >
                 {label}
