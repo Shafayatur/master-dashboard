@@ -63,7 +63,7 @@ export function Popover({ label, ariaLabel, align = 'left', active, className, p
           id={panelId}
           role="dialog"
           className={cn(
-            'absolute z-30 mt-2 min-w-[14rem] rounded-xl border border-line bg-surface p-2 shadow-lg shadow-black/10',
+            'absolute z-30 mt-2 min-w-[14rem] max-w-[calc(100vw-2rem)] rounded-xl border border-line bg-surface p-2 shadow-lg shadow-black/10',
             align === 'right' ? 'right-0' : 'left-0',
             panelClassName,
           )}

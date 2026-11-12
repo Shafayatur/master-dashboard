@@ -344,7 +344,7 @@ export function CommandCenterView({ data, filters, unit, today }: { data: HomeDa
             {filters.preset === 'custom' ? 'Custom' : PRESET_LABELS[filters.preset]}: {formatRange(data.range)}
             {data.compareRange ? ` · vs ${COMPARE_LABELS[filters.compare]} (${formatRange(data.compareRange)})` : ''}
           </p>
-          {filters.segments.length > 0 && <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">The segment filter is applied on the Investors tab, not here yet.</p>}
+          {filters.segments.length > 0 && <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">The segment filter is applied in Data Explorer, not on this tab.</p>}
         </div>
         <PageTools generatedAt={data.generatedAt} unit={unit} />
       </div>
@@ -386,12 +386,12 @@ export function CommandCenterView({ data, filters, unit, today }: { data: HomeDa
           </div>
 
           {/* Row 3: Deposits vs Payouts (2/3) + Investment by project (1/3) */}
-          <div className="grid gap-4 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
             <ChartCard className="lg:col-span-2" title="Deposits vs payouts" subtitle={data.compareRange ? `Dashed: ${COMPARE_LABELS[filters.compare].toLowerCase()}` : undefined}>
               <AreaChart labels={areaLabels} series={areaSeries} bucket={data.bucket} unit={unit} />
             </ChartCard>
             <ChartCard title="Investment by project">
-              <div className="flex flex-wrap items-center gap-4">
+              <div className="flex flex-wrap items-center justify-center gap-4 sm:justify-start">
                 <DonutChart
                   slices={projectSlices}
                   centerValue={formatMoney(projectTotal, unit)}
@@ -402,7 +402,7 @@ export function CommandCenterView({ data, filters, unit, today }: { data: HomeDa
               </div>
             </ChartCard>
             <ChartCard title="Investment by category">
-              <div className="flex flex-wrap items-center gap-4">
+              <div className="flex flex-wrap items-center justify-center gap-4 sm:justify-start">
                 <DonutChart
                   slices={categorySlices}
                   centerValue={formatMoney(categoryTotal, unit)}
@@ -424,7 +424,7 @@ export function CommandCenterView({ data, filters, unit, today }: { data: HomeDa
               <BarChart items={barItems} unit={unit} />
             </ChartCard>
             <ChartCard title="Investor segments">
-              <div className="flex flex-wrap items-center gap-4">
+              <div className="flex flex-wrap items-center justify-center gap-4 sm:justify-start">
                 <DonutChart
                   slices={segmentSlices}
                   centerValue={formatInt(segmentTotal)}

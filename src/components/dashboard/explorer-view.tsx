@@ -14,17 +14,17 @@ type SearchValue = string | string[] | undefined;
 const moneyFormatter = new Intl.NumberFormat('en-US', { maximumFractionDigits: 2 });
 
 const statusTone: Record<string, string> = {
-  approved: 'bg-emerald-500/10 text-emerald-700',
-  completed: 'bg-emerald-500/10 text-emerald-700',
-  closed: 'bg-emerald-500/10 text-emerald-700',
-  pending: 'bg-amber-500/10 text-amber-700',
-  initiated: 'bg-amber-500/10 text-amber-700',
-  booked: 'bg-amber-500/10 text-amber-700',
-  verifying: 'bg-amber-500/10 text-amber-700',
-  rejected: 'bg-rose-500/10 text-rose-700',
-  cancelled: 'bg-rose-500/10 text-rose-700',
-  not_initiated: 'bg-rose-500/10 text-rose-700',
-  invested: 'bg-sky-500/10 text-sky-700',
+  approved: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+  completed: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+  closed: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300',
+  pending: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  initiated: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  booked: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  verifying: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
+  rejected: 'bg-rose-500/10 text-rose-700 dark:text-rose-300',
+  cancelled: 'bg-rose-500/10 text-rose-700 dark:text-rose-300',
+  not_initiated: 'bg-rose-500/10 text-rose-700 dark:text-rose-300',
+  invested: 'bg-sky-500/10 text-sky-700 dark:text-sky-300',
 };
 
 const tableStatuses: Record<ExplorerParams['table'], string[]> = {
@@ -60,6 +60,7 @@ export function ExplorerView({ data, params, searchParams }: Props) {
   exportQuery.delete('page');
   const exportUrl = `/api/export/explorer?${exportQuery.toString()}`;
   const chips = [
+    ...(params.search ? [{ key: 'q', value: params.search, label: `Search: "${params.search}"` }] : []),
     ...params.segments.map((value) => ({
       key: 'seg',
       value,
@@ -86,10 +87,11 @@ export function ExplorerView({ data, params, searchParams }: Props) {
       : []),
   ];
   const removeChip = (key: string, value: string) => {
+    if (key === 'q') return href({ q: '', page: '' });
     const remaining = (currentQuery.get(key) ?? '').split(',').filter((item) => item !== value);
-    return href({ [key]: remaining.join(',') });
+    return href({ [key]: remaining.join(','), page: '' });
   };
-  const clearDrilldownFilters = href({ seg: '', prod: '', cat: '', ten: '', rt: '', sh: '', pm: '', ik: '' });
+  const clearDrilldownFilters = href({ q: '', page: '', seg: '', prod: '', cat: '', ten: '', rt: '', sh: '', pm: '', ik: '' });
   const pages = Math.max(1, Math.ceil(data.total / data.pageSize));
   const from = data.total > 0 ? (data.page - 1) * data.pageSize + 1 : 0;
   const to = Math.min(data.page * data.pageSize, data.total);
@@ -103,7 +105,7 @@ export function ExplorerView({ data, params, searchParams }: Props) {
         </p>
       </div>
 
-      <nav aria-label="Explorer tables" className="group inline-flex rounded-md border border-line">
+      <nav aria-label="Explorer tables" className="group inline-flex flex-wrap rounded-md border border-line">
         {([
           ['deposits', 'Deposits'],
           ['orders', 'Orders'],
@@ -161,7 +163,7 @@ export function ExplorerView({ data, params, searchParams }: Props) {
               placeholder="Search name, phone, email or id"
               title="Enter at least 2 characters to search"
               minLength={2}
-              className="w-72 rounded-md border border-line bg-surface px-3 py-1.5 text-sm text-fg placeholder:text-muted"
+              className="w-full rounded-md border border-line bg-surface px-3 py-1.5 text-sm text-fg placeholder:text-muted sm:w-72"
             />
           </label>
           {tableStatuses[params.table].length > 0 && (

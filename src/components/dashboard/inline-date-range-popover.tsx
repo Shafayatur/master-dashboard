@@ -14,6 +14,7 @@ interface Props {
   onApply: (from: string, to: string) => void;
   minDate?: string;
   maxDate?: string;
+  align?: 'left' | 'right';
 }
 
 export function InlineDateRangePopover(props: Props) {
@@ -27,6 +28,7 @@ function InlineDateRangePopoverContent({
   onApply,
   minDate,
   maxDate,
+  align = 'right',
 }: Props) {
   const [from, setFrom] = useState(initialFrom);
   const [to, setTo] = useState(initialTo);
@@ -44,6 +46,7 @@ function InlineDateRangePopoverContent({
         </>
       }
       ariaLabel={isCustomActive ? `Custom date range: ${formatRange({ from: initialFrom, to: initialTo })}` : 'Choose custom date range'}
+      align={align}
       className={cn(isCustomActive && 'bg-surface text-fg font-medium shadow-sm')}
       panelClassName="w-64 space-y-3 p-3"
     >

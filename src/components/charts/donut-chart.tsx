@@ -44,11 +44,10 @@ export function DonutChart({ slices, centerValue, centerLabel, size = 160, hint 
   const inner = size - 2 * stroke - 12;
   const fontSize = Math.max(10, Math.min(size * 0.17, (inner * 0.95) / Math.max(1, centerValue.length * 0.6)));
 
-  let start = 0;
-  const segments = drawn.map((s) => {
+  const segments = drawn.map((s, idx) => {
     const len = Math.max(0.3, s.share - gap);
+    const start = drawn.slice(0, idx).reduce((sum, segment) => sum + segment.share, 0);
     const offset = -(start + gap / 2);
-    start += s.share;
     return { ...s, len, offset };
   });
 
@@ -122,7 +121,7 @@ export function DonutLegend({ slices, format = 'pct', valueText }: LegendProps) 
   const { items } = resolve(slices);
   if (items.length === 0) return null;
   return (
-    <ul className="min-w-0 flex-1 space-y-1.5 text-sm" aria-label="Legend">
+    <ul className="min-w-[11rem] flex-1 space-y-1.5 text-sm" aria-label="Legend">
       {items.map((s) => (
         <li key={s.key} data-legend={s.key} className="flex items-center justify-between gap-3">
           {s.href ? (

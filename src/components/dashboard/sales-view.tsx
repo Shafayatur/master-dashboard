@@ -176,7 +176,7 @@ export function SalesView({ data, extras, filters, unit, bookingAnchor, search }
           </p>
           {filters.segments.length > 0 && (
             <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
-              The segment filter is applied on the Investors tab, not here yet.
+              The segment filter is applied in Data Explorer, not on this tab.
             </p>
           )}
         </div>
