@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   CalendarClock,
+  ChevronDown,
   ClipboardList,
   Clock,
   Hourglass,
@@ -161,6 +162,7 @@ function Funnel({ data }: { data: CommandCenterData }) {
 
 function Attention({ data, unit }: { data: CommandCenterData; unit: MoneyUnit }) {
   const a = data.attention;
+  const count = a.pendingDeposits.count + a.stuckBookings.count + a.payoutsInFlight.count + a.maturingSoon.count;
   const tiles = [
     { Icon: Hourglass, label: 'Deposits awaiting approval', n: a.pendingDeposits.count, sub: formatMoney(a.pendingDeposits.amount, unit) },
     { Icon: Clock, label: 'Booked but not Invested', n: a.stuckBookings.count, sub: `open over ${a.stuckBookings.olderThanDays} days` },
@@ -168,21 +170,32 @@ function Attention({ data, unit }: { data: CommandCenterData; unit: MoneyUnit })
     { Icon: CalendarClock, label: `Maturing in ${a.maturingSoon.withinDays} days`, n: a.maturingSoon.count, sub: formatMoney(a.maturingSoon.amount, unit) },
   ];
   return (
-    <div className={card}>
-      <h3 className="text-sm font-medium">Needs attention <span className="font-normal text-muted">(right now)</span></h3>
-      <div className="mt-3 grid grid-cols-2 gap-3">
-        {tiles.map(({ Icon, label, n, sub }) => (
-          <div key={label} className="rounded-lg border border-line p-3">
-            <div className="flex items-center gap-2 text-xs text-muted">
-              <Icon className="h-3.5 w-3.5" aria-hidden />
-              <span className="truncate">{label}</span>
+    <details className="group rounded-xl border border-line bg-surface">
+      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-400">
+          <AlertTriangle className="h-4 w-4" aria-hidden />
+        </span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">Needs attention <span className="font-normal text-muted">(right now)</span></span>
+        <span className="rounded-full bg-line px-2 py-0.5 text-xs font-medium">{formatInt(count)}</span>
+        <span className="text-xs text-muted group-open:hidden">Off</span>
+        <span className="hidden text-xs text-emerald-600 dark:text-emerald-400 group-open:inline">Open</span>
+        <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" aria-hidden />
+      </summary>
+      <div className="border-t border-line px-4 pb-4 pt-3">
+        <div className="grid grid-cols-2 gap-3">
+          {tiles.map(({ Icon, label, n, sub }) => (
+            <div key={label} className="rounded-lg border border-line p-3">
+              <div className="flex items-center gap-2 text-xs text-muted">
+                <Icon className="h-3.5 w-3.5" aria-hidden />
+                <span className="truncate">{label}</span>
+              </div>
+              <p className={cn('mt-1 text-xl font-semibold', n > 0 && 'text-amber-600 dark:text-amber-400')}>{formatInt(n)}</p>
+              <p className="text-xs text-muted">{sub}</p>
             </div>
-            <p className={cn('mt-1 text-xl font-semibold', n > 0 && 'text-amber-600 dark:text-amber-400')}>{formatInt(n)}</p>
-            <p className="text-xs text-muted">{sub}</p>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
-    </div>
+    </details>
   );
 }
 
@@ -199,22 +212,33 @@ const INSIGHT_ICONS: Record<Insight['tone'], { Icon: typeof TrendingUp; cls: str
 function QuickInsightsCard({ insights }: { insights: Insight[] }) {
   if (insights.length === 0) return null;
   return (
-    <div className={card}>
-      <h3 className="text-sm font-medium">Quick insights</h3>
-      <ul className="mt-3 space-y-2.5">
-        {insights.map((i) => {
-          const { Icon, cls } = INSIGHT_ICONS[i.tone];
-          return (
-            <li key={i.text} className="flex gap-2.5 text-sm">
-              <span className={cn('mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg', cls)}>
-                <Icon className="h-3.5 w-3.5" aria-hidden />
-              </span>
-              <span>{i.text}</span>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+    <details className="group rounded-xl border border-line bg-surface">
+      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-500/15 text-sky-600 dark:text-sky-400">
+          <Lightbulb className="h-4 w-4" aria-hidden />
+        </span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">Quick insights</span>
+        <span className="rounded-full bg-line px-2 py-0.5 text-xs font-medium">{formatInt(insights.length)}</span>
+        <span className="text-xs text-muted group-open:hidden">Off</span>
+        <span className="hidden text-xs text-emerald-600 dark:text-emerald-400 group-open:inline">Open</span>
+        <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" aria-hidden />
+      </summary>
+      <div className="border-t border-line px-4 pb-4 pt-3">
+        <ul className="space-y-2.5">
+          {insights.map((i) => {
+            const { Icon, cls } = INSIGHT_ICONS[i.tone];
+            return (
+              <li key={i.text} className="flex gap-2.5 text-sm">
+                <span className={cn('mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-lg', cls)}>
+                  <Icon className="h-3.5 w-3.5" aria-hidden />
+                </span>
+                <span>{i.text}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </details>
   );
 }
 
@@ -229,33 +253,44 @@ const ACTIVITY_ICONS: Record<string, { Icon: typeof Wallet; cls: string }> = {
 function RecentActivityCard({ items, unit, nowMs }: { items: HomeData['recent']; unit: MoneyUnit; nowMs: number }) {
   if (items.length === 0) return null;
   return (
-    <div className={card}>
-      <h3 className="text-sm font-medium">Recent activity</h3>
-      <ul className="mt-3 space-y-3">
-        {items.map((item, idx) => {
-          const { Icon, cls } = ACTIVITY_ICONS[item.kind] ?? ACTIVITY_FALLBACK;
-          return (
-            <li key={`${item.kind}-${item.at}-${idx}`} className="flex gap-2.5 text-sm">
-              <span className={cn('mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg', cls)}>
-                <Icon className="h-3.5 w-3.5" aria-hidden />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium">{item.title}</p>
-                <p className="truncate text-xs text-muted">
-                  {item.userId !== null ? (
-                    <Link href={`/investors/${item.userId}`} className="underline decoration-line hover:text-fg">{item.name || 'Investor'}</Link>
-                  ) : (
-                    <span>{item.name || '—'}</span>
-                  )}
-                  {item.amount !== null && <span className="ml-1.5">{formatMoney(item.amount, unit)}</span>}
-                </p>
-                <p className="text-xs text-muted">{relativeTime(item.at, nowMs)}</p>
-              </div>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
+    <details className="group rounded-xl border border-line bg-surface">
+      <summary className="flex cursor-pointer list-none items-center gap-3 px-4 py-3 [&::-webkit-details-marker]:hidden">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-violet-500/15 text-violet-600 dark:text-violet-400">
+          <Clock className="h-4 w-4" aria-hidden />
+        </span>
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">Recent activity</span>
+        <span className="rounded-full bg-line px-2 py-0.5 text-xs font-medium">{formatInt(items.length)}</span>
+        <span className="text-xs text-muted group-open:hidden">Off</span>
+        <span className="hidden text-xs text-emerald-600 dark:text-emerald-400 group-open:inline">Open</span>
+        <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" aria-hidden />
+      </summary>
+      <div className="border-t border-line px-4 pb-4 pt-3">
+        <ul className="space-y-3">
+          {items.map((item, idx) => {
+            const { Icon, cls } = ACTIVITY_ICONS[item.kind] ?? ACTIVITY_FALLBACK;
+            return (
+              <li key={`${item.kind}-${item.at}-${idx}`} className="flex gap-2.5 text-sm">
+                <span className={cn('mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg', cls)}>
+                  <Icon className="h-3.5 w-3.5" aria-hidden />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-medium">{item.title}</p>
+                  <p className="truncate text-xs text-muted">
+                    {item.userId !== null ? (
+                      <Link href={`/investors/${item.userId}`} className="underline decoration-line hover:text-fg">{item.name || 'Investor'}</Link>
+                    ) : (
+                      <span>{item.name || '—'}</span>
+                    )}
+                    {item.amount !== null && <span className="ml-1.5">{formatMoney(item.amount, unit)}</span>}
+                  </p>
+                  <p className="text-xs text-muted">{relativeTime(item.at, nowMs)}</p>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </details>
   );
 }
 
@@ -349,10 +384,7 @@ export function CommandCenterView({ data, filters, unit, today }: { data: HomeDa
         <PageTools generatedAt={data.generatedAt} unit={unit} />
       </div>
 
-      {/* Two-column layout ------------------------------------------------- */}
-      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-        {/* Main area */}
-        <div className="min-w-0 space-y-4">
+      <div className="min-w-0 space-y-4">
           {/* Row 1: four primary KPIs */}
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <KpiCard i={0} icon={Wallet} tone="blue" label="Investment value" delta={dSales} spark={<Sparkline values={data.kpiSpark.sales} tone={sparkTone(dSales)} />}>
@@ -459,14 +491,11 @@ export function CommandCenterView({ data, filters, unit, today }: { data: HomeDa
               )}
             </div>
           </div>
-        </div>
-
-        {/* Right rail */}
-        <div className="min-w-0 space-y-4 xl:sticky xl:top-4 xl:self-start">
-          <QuickInsightsCard insights={insights} />
-          <RecentActivityCard items={data.recent} unit={unit} nowMs={nowMs} />
-          <Attention data={data} unit={unit} />
-        </div>
+          <div className="grid items-start gap-3 lg:grid-cols-3">
+            <QuickInsightsCard insights={insights} />
+            <RecentActivityCard items={data.recent} unit={unit} nowMs={nowMs} />
+            <Attention data={data} unit={unit} />
+          </div>
       </div>
     </div>
   );
