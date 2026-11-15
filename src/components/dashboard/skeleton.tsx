@@ -39,8 +39,8 @@ export function SalesSkeleton() {
   return (
     <div className="space-y-5" aria-busy="true" aria-label="Loading">
       <div className={`${block} h-10 w-72`} />
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {Array.from({ length: 4 }, (_, i) => <div key={`k-${i}`} className={`${block} h-[120px]`} />)}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+        {Array.from({ length: 5 }, (_, i) => <div key={`k-${i}`} className={`${block} h-[120px]`} />)}
       </div>
       <div className={`${block} h-80`} />
       <div className="grid gap-4 lg:grid-cols-2">

@@ -1,4 +1,4 @@
-import { Receipt, UserPlus, Users, Wallet } from 'lucide-react';
+import { Receipt, Repeat, UserPlus, Users, Wallet } from 'lucide-react';
 import type { Filters } from '@/lib/filters/schema';
 import { PRESET_LABELS } from '@/lib/filters/dates';
 import { formatRange } from '@/lib/filters/format';
@@ -129,6 +129,12 @@ export function SalesView({ data, extras, filters, unit, bookingAnchor, search }
   );
   const seriesTotal = data.series.points.reduce((sum, point) => sum + point.value, 0);
   const seriesAverage = data.series.points.length > 0 ? seriesTotal / data.series.points.length : 0;
+  const reinvestTotal = data.series.points.reduce((sum, point) => sum + point.reinvest, 0);
+  const reinvestRow = data.breakdowns.paymentMethod.find((row) => row.key === 'reinvest');
+  const reinvestShare = data.total.sales > 0 ? (reinvestTotal / data.total.sales) * 100 : 0;
+  const reinvestHint = filters.excludeReinvest
+    ? 'excluded by filter'
+    : `${formatInt(reinvestRow?.deposits ?? 0)} deposits · ${reinvestShare.toFixed(0)}% of total`;
   const bucketName = data.series.bucket === 'month' ? 'month' : 'day';
   const investmentItems = data.series.points.map((point) => ({
     label: formatBucketLabel(point.label, data.series.bucket),
@@ -146,6 +152,13 @@ export function SalesView({ data, extras, filters, unit, bookingAnchor, search }
       value: <CountUp kind="money" unit={unit} value={data.total.sales} />,
     },
     {
+      label: 'Reinvestment value',
+      icon: Repeat,
+      tone: 'amber' as const,
+      value: <CountUp kind="money" unit={unit} value={reinvestTotal} />,
+      hint: reinvestHint,
+    },
+    {
       label: 'Deposits',
       icon: Receipt,
       tone: 'emerald' as const,
@@ -160,7 +173,7 @@ export function SalesView({ data, extras, filters, unit, bookingAnchor, search }
     {
       label: 'New vs returning',
       icon: UserPlus,
-      tone: 'amber' as const,
+      tone: 'rose' as const,
       value: `${formatInt(data.total.newInvestors)} / ${formatInt(data.total.oldInvestors)}`,
       hint: 'new / returning',
     },
@@ -183,7 +196,7 @@ export function SalesView({ data, extras, filters, unit, bookingAnchor, search }
         <PageTools generatedAt={data.generatedAt} unit={unit} />
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
         {cards.map(({ label, icon, tone, value, hint }, i) => (
           <KpiCard key={label} i={i} icon={icon} tone={tone} label={label} hint={hint}>
             {value}
