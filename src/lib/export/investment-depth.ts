@@ -6,6 +6,7 @@ const COLUMNS: Column<InvestmentDepthInvestor>[] = [
   { header: 'Name', value: (row) => row.name, kind: 'text' },
   { header: 'Phone', value: (row) => row.phone, kind: 'text' },
   { header: 'Email', value: (row) => row.email, kind: 'text' },
+  { header: 'Active', value: (row) => row.active, kind: 'text' },
   { header: 'Investments', value: (row) => row.investments, kind: 'int' },
   { header: 'Lifetime value', value: (row) => row.lifetimeValue, kind: 'money' },
   { header: 'First investment date', value: (row) => row.firstInvestmentDate, kind: 'date' },

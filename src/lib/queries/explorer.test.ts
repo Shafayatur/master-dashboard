@@ -58,6 +58,12 @@ describe('parseExplorerParams', () => {
   it('accepts a valid table, sort and direction', () => {
     expect(params('t=orders&sort=amount&dir=asc&page=3')).toMatchObject({ table: 'orders', sort: 'amount', dir: 'asc', page: 3 });
   });
+  it('parses valid wealth tiers and defaults tier drilldowns to lifetime sort', () => {
+    const tier = parseExplorerParams(new URLSearchParams('t=investors&tier=1_3l&p=lifetime'), TODAY);
+    expect(tier).toMatchObject({ tier: '1_3l', sort: 'lifetime' });
+    expect(parseExplorerParams(new URLSearchParams('t=investors&tier=1_3l&sort=name'), TODAY).sort).toBe('name');
+    expect(parseExplorerParams(new URLSearchParams('t=investors&tier=unknown'), TODAY).tier).toBeNull();
+  });
   it('ignores unknown segment and global filter values', () => {
     const p = params('t=deposits&seg=unknown&prod=bad&cat=bad&ten=0&rt=unknown&sh=unknown&pm=unknown');
     expect(p.segments).toEqual([]);
@@ -110,9 +116,38 @@ describe('loadExplorer', () => {
     const inv = await loadExplorer(q, params('t=investors&sort=lifetime'));
     expect(inv.rows.map((x) => [x.id, x.lifetime, x.investments])).toEqual([[2, 20000, 1], [1, 10050, 2]]);
     expect(inv.columns.at(-1)).toEqual({ key: 'segment', label: 'Segment', kind: 'text' });
+    expect(inv.columns.at(-2)).toEqual({ key: 'active', label: 'Active', kind: 'text' });
     expect((await loadExplorer(q, params('t=orders&prod=2'))).rows.map((row) => row.id)).toEqual([2]);
     expect((await loadExplorer(q, params('t=orders&os=cancelled'))).total).toBe(3);
     expect((await loadExplorer(q, params('t=payouts&prod=2'))).total).toBe(0);
+  });
+  it('filters lifetime investor snapshots by wealth tier bounds', async () => {
+    await db.exec(`
+      INSERT INTO "user" (id, name, phone, email, "createdAt", "userType") VALUES
+        (30,'Basic boundary','01711000030','basic@example.com','2020-01-01','investor'),
+        (31,'Classic boundary','01711000031','classic@example.com','2020-01-01','investor'),
+        (32,'Starter boundary','01711000032','starter@example.com','2020-01-01','investor'),
+        (33,'No approved investment','01711000033','zero@example.com','2020-01-01','investor');
+      INSERT INTO "order" (id, status, quantity, "totalAmount", "investmentDate", "createdAt", "userId", "productId") VALUES
+        (30,'invested',1,100000,'2020-01-01','2020-01-01',30,1),
+        (31,'invested',1,300000,'2020-01-01','2020-01-01',31,1),
+        (32,'invested',1,99999,'2020-01-01','2020-01-01',32,1);
+      INSERT INTO deposits (id, "date", amount, "paymentMethod", status, "orderId") VALUES
+        (30,'2020-01-01',100000,'cash','approved',30),
+        (31,'2020-01-01',300000,'cash','approved',31),
+        (32,'2020-01-01',99999,'cash','approved',32);
+    `);
+
+    const tier = parseExplorerParams(new URLSearchParams('t=investors&tier=1_3l&p=lifetime'), TODAY);
+    const result = await loadExplorer(q, tier);
+    expect(result.rows.map((row) => row.id)).toEqual([30]);
+    expect(result.rows[0]).toMatchObject({ active: 'Yes' });
+    const exported = await exportExplorer(q, tier);
+    expect(exported.columns.map((column) => column.key)).toContain('active');
+
+    const starter = parseExplorerParams(new URLSearchParams('t=investors&tier=0_1l&p=lifetime'), TODAY);
+    expect((await loadExplorer(q, starter)).rows.map((row) => row.id)).toContain(32);
+    expect((await loadExplorer(q, starter)).rows.map((row) => row.id)).not.toContain(33);
   });
   it('filters investors by product, category, tenure, return type, and shariah product predicates', async () => {
     for (const filter of ['prod=2', 'cat=2', 'ten=12', 'rt=fixed', 'sh=yes']) {

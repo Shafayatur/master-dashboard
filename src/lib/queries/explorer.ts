@@ -2,7 +2,7 @@ import 'server-only';
 import type { DateRange } from '@/lib/filters/dates';
 import { parseFilters, type Filters, type Segment } from '@/lib/filters/schema';
 import { dhakaTs } from '@/lib/time';
-import { DEFAULT_THRESHOLDS } from './investors';
+import { DEFAULT_THRESHOLDS, WEALTH_TIER_DEFS, WEALTH_TIER_KEYS, type WealthTierKey } from './investors';
 import { Params, pgTs, productPredicates, utcBounds, type QueryFn } from './sql-filters';
 import { perInvestorCte, segmentCase } from './segment-sql';
 
@@ -21,6 +21,7 @@ export interface ExplorerParams {
   range: DateRange & { preset: Filters['preset'] };
   filters: Pick<Filters, 'products' | 'categories' | 'tenures' | 'returnTypes' | 'shariah' | 'paymentMethod' | 'investorKind'>;
   segments: Segment[];
+  tier?: WealthTierKey | null;
   search: string;
   status: string[];
   sort: string;
@@ -43,6 +44,11 @@ export const PAGE_SIZE = 50;
 export const EXPORT_MAX = 20_000;
 const MAX_PAGE = 10_000;
 const MAX_SEARCH = 64;
+const WEALTH_TIER_KEY_SET = new Set<string>(WEALTH_TIER_KEYS);
+
+function isWealthTierKey(value: string): value is WealthTierKey {
+  return WEALTH_TIER_KEY_SET.has(value);
+}
 
 interface Col extends ExplorerColumn {
   sql: string;
@@ -61,6 +67,7 @@ interface TableDef {
 const INVESTOR_JOIN = `JOIN "user" u ON u.id = o."userId" AND u."deletedAt" IS NULL AND u."userType"::text = 'investor'`;
 const ORDER_JOIN = `JOIN "order" o ON o.id = X."orderId" AND o."deletedAt" IS NULL`;
 const investorFirstDepJoin = `LEFT JOIN (SELECT o2."userId" AS user_id, MIN(d2."date") AS first_dep FROM deposits d2 JOIN "order" o2 ON o2.id = d2."orderId" WHERE d2."deletedAt" IS NULL AND o2."deletedAt" IS NULL AND d2.status::text = 'approved' GROUP BY o2."userId") fd ON fd.user_id = u.id`;
+const ltvSql = `(SELECT COALESCE(SUM(d.amount), 0)::float8 FROM deposits d JOIN "order" io ON io.id = d."orderId" AND io."deletedAt" IS NULL WHERE io."userId" = u.id AND d."deletedAt" IS NULL AND d.status::text = 'approved')`;
 const day = (col: string) => `to_char(${dhakaTs(col)}, 'YYYY-MM-DD')`;
 const maturityExpr = `COALESCE(sched.last_pay, COALESCE(o."investmentDate", o."createdAt") + (split_part(p."productDuration"::text, ' ', 1)::int * interval '1 month'))`;
 const WHO = (key: string, sql: string, label: string): Col => ({ key, label, kind: 'text', sql });
@@ -203,8 +210,9 @@ LEFT JOIN (
         key: 'lifetime',
         label: 'Lifetime value',
         kind: 'money',
-        sql: `(SELECT COALESCE(SUM(d.amount), 0)::float8 FROM deposits d JOIN "order" io ON io.id = d."orderId" AND io."deletedAt" IS NULL WHERE io."userId" = u.id AND d."deletedAt" IS NULL AND d.status::text = 'approved')`,
+        sql: ltvSql,
       },
+      WHO('active', "CASE WHEN sg.seg = 'active' THEN 'Yes' ELSE 'No' END", 'Active'),
       WHO('segment', 'sg.seg', 'Segment'),
     ],
   },
@@ -221,8 +229,11 @@ export function parseExplorerParams(sp: RawParams, today: string): ExplorerParam
   const table: ExplorerTable = EXPLORER_TABLES.includes(t) ? t : 'deposits';
   const def = TABLES[table];
   const parsedFilters = parseFilters(sp, today);
+  const tierValue = get('tier');
+  const tier = isWealthTierKey(tierValue) ? tierValue : null;
   const sortKey = get('sort');
-  const sort = def.columns.some((c) => c.key === sortKey) ? sortKey : def.defaultSort;
+  const defaultSort = table === 'investors' && tier && !sortKey ? 'lifetime' : def.defaultSort;
+  const sort = def.columns.some((c) => c.key === sortKey) ? sortKey : defaultSort;
   const page = Number.parseInt(get('page'), 10);
   return {
     table,
@@ -237,6 +248,7 @@ export function parseExplorerParams(sp: RawParams, today: string): ExplorerParam
       investorKind: parsedFilters.investorKind,
     },
     segments: parsedFilters.segments,
+    tier,
     search: get('q').trim().slice(0, MAX_SEARCH),
     status: get('st').split(',').filter((s) => def.statuses.includes(s)),
     sort,
@@ -266,18 +278,25 @@ function build(params: ExplorerParams, now: Date) {
     : baseFrom;
   const { start, end } = utcBounds(params.range);
   const hasInvestorKind = params.filters.investorKind !== 'all';
-  const isAllTimeSegmentDrilldown = params.table === 'investors'
-    && params.segments.length > 0
+  const allRegistrations = params.table === 'investors'
+    && (params.segments.length > 0 || params.tier != null)
     && !hasInvestorKind
     && (params.range.preset === 'lifetime' || params.range.from <= '2021-01-01');
-  const startTs = isAllTimeSegmentDrilldown ? '' : `${p.add(start)}::timestamp`;
+  const startTs = allRegistrations ? '' : `${p.add(start)}::timestamp`;
   const endTs = `${p.add(end)}::timestamp`;
-  const dateConds = params.table === 'investors' && hasInvestorKind && !isAllTimeSegmentDrilldown
+  const dateConds = params.table === 'investors' && hasInvestorKind && !allRegistrations
     ? [`EXISTS (SELECT 1 FROM deposits d_range JOIN "order" o_range ON o_range.id = d_range."orderId" AND o_range."deletedAt" IS NULL WHERE o_range."userId" = u.id AND d_range."deletedAt" IS NULL AND d_range.status::text = 'approved' AND d_range."date" >= ${startTs} AND d_range."date" < ${endTs})`]
-    : isAllTimeSegmentDrilldown
+    : allRegistrations
       ? [`(u."createdAt" IS NULL OR u."createdAt" < ${endTs})`]
     : [`${def.dateCol} >= ${startTs}`, `${def.dateCol} < ${endTs}`];
   const conds = [...def.where, ...dateConds];
+  if (params.table === 'investors' && params.tier) {
+    const { min, max } = WEALTH_TIER_DEFS[params.tier];
+    const lowerBound = `${ltvSql} ${min === 0 ? '>' : '>='} ${p.add(min)}::float8`;
+    conds.push(max === null
+      ? lowerBound
+      : `${lowerBound} AND ${ltvSql} < ${p.add(max)}::float8`);
+  }
   if (hasInvestorKind) {
     conds.push(params.filters.investorKind === 'new'
       ? `fd.first_dep >= ${startTs} AND fd.first_dep < ${endTs}`

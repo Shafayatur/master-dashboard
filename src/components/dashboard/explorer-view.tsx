@@ -66,6 +66,9 @@ export function ExplorerView({ data, params, searchParams }: Props) {
       value,
       label: `Segment: ${value.replaceAll('_', ' ')}`,
     })),
+    ...(params.tier
+      ? [{ key: 'tier', value: params.tier, label: `Wealth tier: ${params.tier.replaceAll('_', ' ')}` }]
+      : []),
     ...params.filters.products.map((value) => ({ key: 'prod', value: String(value), label: `Product: ${value}` })),
     ...params.filters.categories.map((value) => ({ key: 'cat', value: String(value), label: `Category: ${value}` })),
     ...params.filters.tenures.map((value) => ({ key: 'ten', value: String(value), label: `Tenure: ${value} months` })),
@@ -91,7 +94,7 @@ export function ExplorerView({ data, params, searchParams }: Props) {
     const remaining = (currentQuery.get(key) ?? '').split(',').filter((item) => item !== value);
     return href({ [key]: remaining.join(','), page: '' });
   };
-  const clearDrilldownFilters = href({ q: '', page: '', seg: '', prod: '', cat: '', ten: '', rt: '', sh: '', pm: '', ik: '' });
+  const clearDrilldownFilters = href({ q: '', page: '', seg: '', tier: '', prod: '', cat: '', ten: '', rt: '', sh: '', pm: '', ik: '' });
   const pages = Math.max(1, Math.ceil(data.total / data.pageSize));
   const from = data.total > 0 ? (data.page - 1) * data.pageSize + 1 : 0;
   const to = Math.min(data.page * data.pageSize, data.total);

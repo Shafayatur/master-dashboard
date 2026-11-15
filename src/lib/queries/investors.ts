@@ -14,6 +14,19 @@ export interface Thresholds {
 export const DEFAULT_THRESHOLDS: Thresholds = { recentlyActiveDays: 30, coolingDays: 60 };
 /** Lifetime-value tier boundaries in BDT: tiers are below the 1st, between each pair, and above the last. */
 export const DEFAULT_BANDS = [50_000, 200_000, 1_000_000, 5_000_000];
+export const WEALTH_TIER_BANDS = [100_000, 300_000, 500_000, 1_000_000, 2_000_000, 5_000_000, 10_000_000];
+export const WEALTH_TIER_KEYS = ['0_1l', '1_3l', '3_5l', '5_10l', '10_20l', '20_50l', '50l_1cr', '1cr_plus'] as const;
+export type WealthTierKey = (typeof WEALTH_TIER_KEYS)[number];
+export const WEALTH_TIER_DEFS: Record<WealthTierKey, { label: string; min: number; max: number | null }> = {
+  '0_1l': { label: 'Starter (0–1 Lac)', min: 0, max: 100_000 },
+  '1_3l': { label: 'Basic (1–3 Lacs)', min: 100_000, max: 300_000 },
+  '3_5l': { label: 'Classic (3–5 Lacs)', min: 300_000, max: 500_000 },
+  '5_10l': { label: 'Bronze (5–10 Lacs)', min: 500_000, max: 1_000_000 },
+  '10_20l': { label: 'Silver (10–20 Lacs)', min: 1_000_000, max: 2_000_000 },
+  '20_50l': { label: 'Gold (20–50 Lacs)', min: 2_000_000, max: 5_000_000 },
+  '50l_1cr': { label: 'Platinum (50L–1 Cr)', min: 5_000_000, max: 10_000_000 },
+  '1cr_plus': { label: 'Diamond (1 Cr+)', min: 10_000_000, max: null },
+};
 
 export interface SegmentRow {
   key: SegmentKey;
@@ -216,7 +229,7 @@ FROM "user" u JOIN fd ON fd."userId" = u.id WHERE ${INVESTOR} AND fd.first_dep >
 export async function loadInvestors(q: QueryFn, today: string, now: Date): Promise<InvestorsData> {
   const [segs, tr, conc, coh, median, depth] = await Promise.all([
     segments(q, now),
-    tiers(q),
+    tiers(q, WEALTH_TIER_BANDS),
     concentration(q),
     cohorts(q, today),
     medianDaysToFirst(q),

@@ -5,6 +5,7 @@ import {
   depositSliceHref,
   explorerHref,
   investorSegmentHref,
+  investorTierHref,
 } from './drilldown';
 
 describe('explorerHref', () => {
@@ -79,6 +80,23 @@ describe('donut drill-down mappings', () => {
     expect(query.get('seg')).toBe('cooling');
     expect(investorSegmentHref('', 'unknown', 1)).toBeUndefined();
     expect(investorSegmentHref('', 'cooling', 0)).toBeUndefined();
+  });
+
+  it('maps wealth tiers to lifetime investor Explorer filters', () => {
+    const href = investorTierHref(
+      'p=last30&from=2026-09-29&to=2026-10-28&prod=2&seg=active',
+      '1_3l',
+      4,
+    );
+    const query = new URL(href ?? '', 'https://example.test').searchParams;
+    expect(query.get('t')).toBe('investors');
+    expect(query.get('p')).toBe('lifetime');
+    expect(query.has('from')).toBe(false);
+    expect(query.has('to')).toBe(false);
+    expect(query.get('tier')).toBe('1_3l');
+    expect(query.has('seg')).toBe(false);
+    expect(query.has('prod')).toBe(false);
+    expect(investorTierHref('', '1_3l', 0)).toBeUndefined();
   });
 
   it('maps only confirmed reinvestment to approved reinvest deposits', () => {

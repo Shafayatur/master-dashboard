@@ -45,6 +45,7 @@ export interface InvestmentDepthInvestor {
   name: string;
   phone: string;
   email: string;
+  active: 'Yes' | 'No';
   investments: number;
   lifetimeValue: number;
   firstInvestmentDate: string;
@@ -118,6 +119,10 @@ export async function listInvestmentDepth(
 )
 SELECT u.id AS user_id, COALESCE(u.name, '') AS name, COALESCE(u.phone, '') AS phone,
   COALESCE(u.email, '') AS email, investor_counts.investments,
+  CASE WHEN EXISTS (
+    SELECT 1 FROM "order" o2
+    WHERE o2."userId" = u.id AND o2."deletedAt" IS NULL AND o2.status = 'invested'
+  ) THEN 'Yes' ELSE 'No' END AS active,
   COALESCE(ltv.ltv, 0)::float8 AS lifetime_value,
   to_char(${dhakaTs('investor_counts.first_date')}::date, 'YYYY-MM-DD') AS first_investment_date,
   to_char(${dhakaTs('investor_counts.latest_date')}::date, 'YYYY-MM-DD') AS latest_investment_date
@@ -134,6 +139,7 @@ LIMIT ${rowLimit}::int`,
     name: str(row.name),
     phone: str(row.phone),
     email: str(row.email),
+    active: row.active === 'Yes' ? 'Yes' : 'No',
     investments: num(row.investments),
     lifetimeValue: num(row.lifetime_value),
     firstInvestmentDate: str(row.first_investment_date),

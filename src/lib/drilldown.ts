@@ -1,4 +1,5 @@
 import { SEGMENTS, type Segment } from '@/lib/filters/schema';
+import type { WealthTierKey } from '@/lib/queries/investors';
 
 export const ALL_TIME = { from: '2021-01-01' } as const;
 
@@ -24,6 +25,7 @@ const PRESERVED_KEYS = [
   'sh',
   'ik',
   'seg',
+  'tier',
 ] as const;
 
 function toSearchParams(params: SearchParams): URLSearchParams {
@@ -79,6 +81,22 @@ export function investorSegmentHref(
   value: number,
 ): string | undefined {
   if (!Number.isFinite(value) || value <= 0 || !isSegment(segment)) return undefined;
+  return investorDrillHref(params, { seg: segment });
+}
+
+export function investorTierHref(
+  params: SearchParams,
+  tier: WealthTierKey,
+  value: number,
+): string | undefined {
+  if (!Number.isFinite(value) || value <= 0) return undefined;
+  return investorDrillHref(params, { tier });
+}
+
+function investorDrillHref(
+  params: SearchParams,
+  extra: { seg?: string; tier?: WealthTierKey },
+): string {
   return explorerHref({
     table: 'investors',
     params,
@@ -96,7 +114,8 @@ export function investorSegmentHref(
       rt: undefined,
       sh: undefined,
       ik: undefined,
-      seg: segment,
+      seg: extra.seg,
+      tier: extra.tier,
     },
   });
 }

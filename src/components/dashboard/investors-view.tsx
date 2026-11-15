@@ -12,7 +12,7 @@ import { KpiCard } from '@/components/charts/kpi-card';
 import { cn } from '@/components/ui/cn';
 import { buildInvestorInsights } from '@/lib/dashboard/investor-insights';
 import { formatBucketLabel } from '@/lib/format/labels';
-import { investorSegmentHref } from '@/lib/drilldown';
+import { investorSegmentHref, investorTierHref } from '@/lib/drilldown';
 import { formatInt, formatMoney, type MoneyUnit } from '@/lib/format/money';
 import type { InvestorsData, SegmentKey, TierRow } from '@/lib/queries/investors';
 import type { InvestorsExtras } from '@/lib/queries/tabs-extra';
@@ -87,7 +87,22 @@ const SEGMENT_INFO: Record<SegmentKey, { label: string; color: string }> = {
   prospect: { label: 'Prospect', color: CHART_COLORS[5] ?? 'rgb(var(--chart-6))' },
 };
 
+const WEALTH_TIERS = [
+  { key: '0_1l', name: 'Starter', range: '0–1 Lac', color: '#14b8a6' },
+  { key: '1_3l', name: 'Basic', range: '1–3 Lacs', color: '#0ea5e9' },
+  { key: '3_5l', name: 'Classic', range: '3–5 Lacs', color: '#64748b' },
+  { key: '5_10l', name: 'Bronze', range: '5–10 Lacs', color: '#d97706' },
+  { key: '10_20l', name: 'Silver', range: '10–20 Lacs', color: '#94a3b8' },
+  { key: '20_50l', name: 'Gold', range: '20–50 Lacs', color: '#eab308' },
+  { key: '50l_1cr', name: 'Platinum', range: '50L–1 Cr', color: '#3b82f6' },
+  { key: '1cr_plus', name: 'Diamond', range: '1 Cr+', color: '#8b5cf6' },
+] as const;
+
 function tierLabel(tier: TierRow, index: number, count: number, unit: MoneyUnit): string {
+  if (count === WEALTH_TIERS.length) {
+    const named = WEALTH_TIERS[index];
+    if (named) return `${named.name} (${named.range})`;
+  }
   if (index === 0) return `Under ${formatMoney(tier.max ?? tier.min, unit)}`;
   if (index === count - 1) return `${formatMoney(tier.min, unit)} and above`;
   return `${formatMoney(tier.min, unit)} to ${formatMoney(tier.max ?? tier.min, unit)}`;
@@ -118,10 +133,26 @@ export function InvestorsView({ data, extras, unit, search, today }: Props) {
     label: tierLabel(tier, index, data.tiers.length, unit),
     values: [{
       value: tierMetric === 'investors' ? tier.investors : tier.value,
-      color: CHART_COLORS[1] ?? '',
+      color: WEALTH_TIERS[index]?.color ?? CHART_COLORS[1] ?? '',
       name: tierMetric === 'investors' ? 'Investors' : 'Lifetime value',
     }],
   }));
+  const wealthSlices = [...data.tiers]
+    .map((tier, index) => {
+      const meta = WEALTH_TIERS[index];
+      const key: string = meta?.key ?? `tier-${index}`;
+      return {
+        key,
+        label: meta ? `${meta.name} (${meta.range})` : tierLabel(tier, index, data.tiers.length, unit),
+        value: tier.investors,
+        amount: tier.value,
+        color: meta?.color ?? CHART_COLORS[index % CHART_COLORS.length] ?? 'rgb(var(--chart-1))',
+        href: meta ? investorTierHref(search, meta.key, tier.investors) : undefined,
+      };
+    })
+    .reverse();
+  const wealthSliceByKey = new Map(wealthSlices.map((slice) => [slice.key, slice]));
+  const totalInvestedInvestors = data.tiers.reduce((sum, tier) => sum + tier.investors, 0);
   const paretoNote = `Top 10 investors hold ${data.concentration.top10Share.toFixed(0)}% of lifetime investment; the top 20% hold ${data.concentration.top20PctShare.toFixed(0)}%.`;
   const registrationsVsFirst = extras.registrationsVsFirst.slice(-windowMonths);
   const cohorts = data.cohorts.slice(-windowMonths);
@@ -167,7 +198,6 @@ export function InvestorsView({ data, extras, unit, search, today }: Props) {
       <div className="min-w-0 space-y-4">
           <div className="grid gap-4 lg:grid-cols-2">
             <ChartCard
-              className="lg:col-span-2"
               title="Investor segments"
               subtitle="Snapshot as of now. Ignores the date and product filters."
             >
@@ -188,6 +218,29 @@ export function InvestorsView({ data, extras, unit, search, today }: Props) {
                 />
               </div>
               <p className="mt-2 text-xs text-muted">Investors · average lifetime value · share of investors</p>
+            </ChartCard>
+
+            <ChartCard
+              title="Investor wealth tiers"
+              subtitle="Categorized by approved lifetime investment value (Diamond 1 Cr+ down to Starter 0–1 Lac)."
+            >
+              <div className="flex flex-wrap items-center justify-center gap-4 sm:justify-start">
+                <DonutChart
+                  slices={wealthSlices}
+                  centerValue={formatInt(totalInvestedInvestors)}
+                  centerLabel="Invested"
+                  hint="Click a slice to see the records"
+                />
+                <DonutLegend
+                  slices={wealthSlices}
+                  format="value"
+                  valueText={(key) => {
+                    const tier = wealthSliceByKey.get(key);
+                    return tier ? `${formatInt(tier.value)} · ${formatMoney(tier.amount, unit)}` : '0';
+                  }}
+                />
+              </div>
+              <p className="mt-2 text-xs text-muted">Investors · total tier investment value · share of invested investors</p>
             </ChartCard>
 
             <ChartCard

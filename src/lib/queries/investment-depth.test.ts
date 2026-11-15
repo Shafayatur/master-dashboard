@@ -93,6 +93,14 @@ describe('investment depth', () => {
     const rows = await listInvestmentDepth(q, 'all');
     expect(rows).toHaveLength(depth.total);
     expect(rows.map((row) => row.userId)).toEqual([4, 3, 2, 6, 7, 1]);
+    expect(rows.map((row) => [row.userId, row.active])).toEqual([
+      [4, 'Yes'],
+      [3, 'Yes'],
+      [2, 'Yes'],
+      [6, 'Yes'],
+      [7, 'No'],
+      [1, 'Yes'],
+    ]);
     expect(rows[3]).toMatchObject({
       userId: 6,
       investments: 1,
@@ -109,7 +117,7 @@ describe('investment depth', () => {
 
     const csv = investmentDepthExport(rows).toCsv();
     expect(csv.split('\r\n')[0]).toBe(
-      '\uFEFFUser ID,Name,Phone,Email,Investments,Lifetime value,First investment date,Latest investment date',
+      '\uFEFFUser ID,Name,Phone,Email,Active,Investments,Lifetime value,First investment date,Latest investment date',
     );
     expect(csv).toContain('01700000004');
   });
