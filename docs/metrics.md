@@ -30,7 +30,7 @@ exclude soft-deleted rows (`"deletedAt" IS NOT NULL`). Amounts are BDT.
 | Depth bucket | Investors with at least one investment are grouped into `1`, `2`, `3`, and `4plus` (four or more). Single = exactly 1; multiple = 2 or more. |
 | Bucket share | Bucket investor count / all investors with at least one investment x 100. |
 | Snapshot | Ignores date, product, and other dashboard filters, like the Investor segments card. |
-| Export lifetime value | Sum of approved deposits on non-deleted orders, matching the action-list lifetime-value definition. First and latest investment dates use the order's `investmentDate` in Dhaka time. |
+| Export lifetime value | Sum of approved deposits on invested or closed orders, matching the action-list lifetime-value definition. First and latest investment dates use the order's `investmentDate` in Dhaka time. |
 
 ## Segments (per investor, across all their orders)
 Maturity of an order = last `return_schedules."paymentDate"`, else `COALESCE(investmentDate, createdAt) + productDuration`.
@@ -39,8 +39,8 @@ Maturity of an order = last `return_schedules."paymentDate"`, else `COALESCE(inv
 |---|---|
 | Active | Has any order with status `invested`, regardless of maturity. |
 | Recently active | Has no `invested` orders and the latest maturity of their `closed` orders was 0-30 days ago |
-| Cooling | Has no `invested` orders and the latest maturity of their `closed` orders was 30-60 days ago |
-| Inactive | Has no `invested` orders and the latest maturity of their `closed` orders was more than 60 days ago |
+| Cooling | Has no `invested` orders and the latest maturity of their `closed` orders was 30-90 days ago |
+| Inactive | Has no `invested` orders and the latest maturity of their `closed` orders was more than 90 days ago |
 | Prospect | Registered and has no `invested` or `closed` orders |
 
 Only `closed` orders determine the maturity-based segments; an investor with any `invested` order is always Active. Investors with no `invested` orders and no `closed` orders are Prospects. Invested orders past maturity remain an "overdue" attention counter. Thresholds are editable (`app_settings.segment_thresholds`).

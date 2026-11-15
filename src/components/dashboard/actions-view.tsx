@@ -166,7 +166,7 @@ export function ActionsView({
         )}
         <ActionListCard
           title="Cooling investors"
-          description="Nothing running; the last project matured 30 to 60 days ago. Reach out before they turn inactive."
+          description="Nothing running; the last project matured 30 to 90 days ago. Reach out before they turn inactive."
           total={data.cooling.total}
           amountLabel={`Lifetime value: ${formatMoney(data.cooling.amount, unit)}`}
           shown={data.cooling.rows.length}

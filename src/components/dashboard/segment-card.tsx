@@ -10,8 +10,8 @@ const card = 'rounded-xl border border-line bg-surface p-4';
 const segmentInfo = {
   active: { label: 'Active', hint: 'running project', color: 'bg-emerald-500' },
   recently_active: { label: 'Recently active', hint: 'matured within 30 days', color: 'bg-sky-500' },
-  cooling: { label: 'Cooling', hint: 'matured 30-60 days ago', color: 'bg-amber-500' },
-  inactive: { label: 'Inactive', hint: 'matured over 60 days ago', color: 'bg-rose-500' },
+  cooling: { label: 'Cooling', hint: 'matured 30-90 days ago', color: 'bg-amber-500' },
+  inactive: { label: 'Inactive', hint: 'matured over 90 days ago', color: 'bg-rose-500' },
   prospect: { label: 'Prospect', hint: 'never invested', color: 'bg-slate-400' },
 } as const;
 

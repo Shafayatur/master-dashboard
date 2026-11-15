@@ -1,13 +1,13 @@
 'use client';
 
-import { useFormState } from 'react-dom';
+import { useActionState } from 'react';
 import { removeTarget } from '@/app/(app)/targets/actions';
 import type { TargetFormState } from '@/lib/targets/input';
 
 const INITIAL_STATE: TargetFormState = { ok: false, message: '' };
 
 export function TargetRemoveButton({ month }: { month: string }) {
-  const [, formAction] = useFormState(removeTarget, INITIAL_STATE);
+  const [, formAction] = useActionState(removeTarget, INITIAL_STATE);
 
   return (
     <form action={formAction}>

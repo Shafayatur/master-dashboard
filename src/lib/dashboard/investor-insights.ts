@@ -9,7 +9,7 @@ export function buildInvestorInsights(d: InvestorsData, unit: MoneyUnit): Insigh
 
   const cooling = seg('cooling');
   if (cooling && cooling.investors > 0) {
-    out.push({ tone: 'warn', text: `${formatInt(cooling.investors)} investors are cooling (last project matured 30-60 days ago) with ${formatMoney(cooling.lifetimeValue, unit)} invested over their lifetime. Reach out before they turn inactive.` });
+    out.push({ tone: 'warn', text: `${formatInt(cooling.investors)} investors are cooling (last project matured 30-90 days ago) with ${formatMoney(cooling.lifetimeValue, unit)} invested over their lifetime. Reach out before they turn inactive.` });
   }
   const everInvested = d.segments.filter((s) => s.key !== 'prospect').reduce((a, s) => a + s.investors, 0);
   const inactive = seg('inactive');

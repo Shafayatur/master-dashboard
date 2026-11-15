@@ -114,7 +114,7 @@ export function parseFilters(input: Input, today: string): Filters {
     preset,
     range,
     compare,
-    compareRange: resolveCompare(range, compare),
+    compareRange: preset === 'lifetime' ? null : resolveCompare(range, compare),
     depositStatus: ds.length ? ds : [...DEFAULT_DEPOSIT_STATUS],
     orderStatus: list(ORDER_STATUSES, get(FILTER_QUERY_KEYS.orderStatus)),
     paymentMethod: list(PAYMENT_METHODS, get(FILTER_QUERY_KEYS.paymentMethod)),
@@ -194,7 +194,7 @@ export function patchFilters(f: Filters, patch: FilterPatch, today: string): Fil
   } else if (f.preset !== 'custom') {
     next.range = resolvePreset(f.preset, today);
   }
-  next.compareRange = resolveCompare(next.range, next.compare);
+  next.compareRange = next.preset === 'lifetime' ? null : resolveCompare(next.range, next.compare);
   if (next.depositStatus.length === 0) next.depositStatus = [...DEFAULT_DEPOSIT_STATUS];
   return next;
 }

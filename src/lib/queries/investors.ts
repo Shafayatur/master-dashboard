@@ -11,7 +11,7 @@ export interface Thresholds {
   recentlyActiveDays: number;
   coolingDays: number;
 }
-export const DEFAULT_THRESHOLDS: Thresholds = { recentlyActiveDays: 30, coolingDays: 60 };
+export const DEFAULT_THRESHOLDS: Thresholds = { recentlyActiveDays: 30, coolingDays: 90 };
 /** Lifetime-value tier boundaries in BDT: tiers are below the 1st, between each pair, and above the last. */
 export const DEFAULT_BANDS = [50_000, 200_000, 1_000_000, 5_000_000];
 export const WEALTH_TIER_BANDS = [100_000, 300_000, 500_000, 1_000_000, 2_000_000, 5_000_000, 10_000_000];

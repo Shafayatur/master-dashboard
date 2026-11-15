@@ -1,6 +1,7 @@
 'use client';
 
-import { useFormState, useFormStatus } from 'react-dom';
+import { useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 import { saveTarget } from '@/app/(app)/targets/actions';
 import type { TargetFormState } from '@/lib/targets/input';
 
@@ -23,7 +24,7 @@ function SubmitButton() {
 }
 
 export function TargetForm({ defaultMonth }: { defaultMonth: string }) {
-  const [state, formAction] = useFormState(saveTarget, INITIAL_STATE);
+  const [state, formAction] = useActionState(saveTarget, INITIAL_STATE);
 
   return (
     <div className="rounded-xl border border-line bg-surface p-4">

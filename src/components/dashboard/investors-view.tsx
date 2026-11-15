@@ -130,7 +130,9 @@ export function InvestorsView({ data, extras, unit, search, today }: Props) {
   const cooling = segmentByKey.get('cooling')?.investors ?? 0;
   const inactive = segmentByKey.get('inactive')?.investors ?? 0;
   const tierItems = data.tiers.map((tier, index) => ({
-    label: tierLabel(tier, index, data.tiers.length, unit),
+    label: data.tiers.length === WEALTH_TIERS.length
+      ? WEALTH_TIERS[index]?.name ?? tierLabel(tier, index, data.tiers.length, unit)
+      : tierLabel(tier, index, data.tiers.length, unit),
     values: [{
       value: tierMetric === 'investors' ? tier.investors : tier.value,
       color: WEALTH_TIERS[index]?.color ?? CHART_COLORS[1] ?? '',

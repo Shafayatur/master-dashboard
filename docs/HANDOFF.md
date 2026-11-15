@@ -94,7 +94,7 @@ Joins: `deposits."orderId" -> "order".id`, `"order"."userId" -> "user".id`, `"or
 - **Target vs actual:** month-to-date sales vs manual target, with run-rate projection and required daily amount.
 - **Reinvestment, three labelled levels:** (1) confirmed: `paymentMethod = 'reinvest'`; (2) payout-linked (estimated): approved deposit by an investor paid out in the previous 30 days (window adjustable); (3) repeat investor: 2nd or later investment. Decision metric: payout-to-reinvest rate within 30/60/90 days.
 - **Maturity of an order:** last `return_schedules."paymentDate"`, else `"investmentDate" + productDuration`.
-- **Segments (per investor across all orders):** Active = has an `invested` order that has not yet matured (updated 2026-10-14; overdue invested orders get their own attention counter). Otherwise by latest maturity: 0-30 days ago = Recently active, 30-60 = Cooling, over 60 = Inactive. Prospect = registered, never invested. Thresholds editable in `app_settings`.
+- **Segments (per investor across all orders):** Active = has an `invested` order that has not yet matured (updated 2026-10-14; overdue invested orders get their own attention counter). Otherwise by latest maturity: 0-30 days ago = Recently active, 30-90 = Cooling, over 90 = Inactive. Prospect = registered, never invested. Thresholds editable in `app_settings`.
 - Also: investor tiers by lifetime value, best/preferred tenure, best projects (value, investor count, fill rate, days to fill), concentration (top 10 / top 20% share).
 
 ## 6. Dashboard spec

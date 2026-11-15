@@ -249,11 +249,12 @@ export function FilterBar() {
   const explorerDeposits = explorer && (table === null || table === 'deposits');
   const showInvestorSegment = explorer;
   const dirtyMoreFilters = moreFilterCount(filters, showInvestorSegment) > 0;
+  const dirtyCompare = filters.preset !== 'lifetime' && filters.compare !== DEFAULT_COMPARE;
   const hasDrilldownFilters = filters.products.length > 0 || filters.categories.length > 0 || filters.segments.length > 0;
   const dirty = explorer
     ? filters.preset !== 'mtd' || (explorerDeposits && filters.paymentMethod.length > 0) || dirtyMoreFilters || hasDrilldownFilters
     : filters.preset !== 'mtd' ||
-      filters.compare !== DEFAULT_COMPARE ||
+      dirtyCompare ||
       !(filters.depositStatus.length === 1 && filters.depositStatus[0] === 'approved') ||
       filters.orderStatus.length > 0 ||
       filters.paymentMethod.length > 0 ||
@@ -267,22 +268,26 @@ export function FilterBar() {
         <DatePicker key={`${filters.range.from}_${filters.range.to}`} filters={filters} update={update} />
         {!explorer && (
           <>
-            <label className={cn(triggerClass, 'relative gap-1.5 pr-2')}>
-              <span className="text-muted">vs</span>
-              <select
-                aria-label="Compare with"
-                value={filters.compare}
-                onChange={(e) => update({ compare: e.target.value as CompareMode })}
-                className="cursor-pointer bg-transparent pr-1 text-sm font-medium outline-none"
-              >
-                {COMPARE_MODES.map((m) => (
-                  <option key={m} value={m}>
-                    {COMPARE_LABELS[m]}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <span className="mx-1 hidden h-5 w-px bg-line sm:block" aria-hidden />
+            {filters.preset !== 'lifetime' && (
+              <>
+                <label className={cn(triggerClass, 'relative gap-1.5 pr-2')}>
+                  <span className="text-muted">vs</span>
+                  <select
+                    aria-label="Compare with"
+                    value={filters.compare}
+                    onChange={(e) => update({ compare: e.target.value as CompareMode })}
+                    className="cursor-pointer bg-transparent pr-1 text-sm font-medium outline-none"
+                  >
+                    {COMPARE_MODES.map((m) => (
+                      <option key={m} value={m}>
+                        {COMPARE_LABELS[m]}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <span className="mx-1 hidden h-5 w-px bg-line sm:block" aria-hidden />
+              </>
+            )}
             <MultiSelect title="Deposits" none="Approved" options={DEPOSIT_STATUSES} labels={LABELS.deposit} selected={filters.depositStatus.length === 1 && filters.depositStatus[0] === 'approved' ? [] : filters.depositStatus} onChange={(depositStatus) => update({ depositStatus })} />
             <MultiSelect title="Orders" none="All" options={ORDER_STATUSES} labels={LABELS.order} selected={filters.orderStatus} onChange={(orderStatus) => update({ orderStatus })} />
           </>
@@ -301,6 +306,7 @@ export function FilterBar() {
             Exclude reinvest
           </button>
         )}
+        <MoreFilters filters={filters} update={update} showInvestorSegment={showInvestorSegment} />
         {!explorer && filters.products.map((product) => (
           <button
             key={`product-${product}`}
@@ -337,7 +343,6 @@ export function FilterBar() {
             <X className="h-3.5 w-3.5" aria-hidden />
           </button>
         ))}
-        <MoreFilters filters={filters} update={update} showInvestorSegment={showInvestorSegment} />
         {dirty && (
           <button type="button" onClick={reset} className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2 text-sm text-muted hover:text-fg">
             <RotateCcw className="h-3.5 w-3.5" aria-hidden />
@@ -345,7 +350,7 @@ export function FilterBar() {
           </button>
         )}
       </div>
-      {!explorer && filters.compareRange && <p className="mt-2 text-xs text-muted">Compared with {formatRange(filters.compareRange)}</p>}
+      {!explorer && filters.preset !== 'lifetime' && filters.compareRange && <p className="mt-2 text-xs text-muted">Compared with {formatRange(filters.compareRange)}</p>}
     </div>
   );
 }
