@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { UserRound, UserRoundCheck, UserRoundMinus, UserRoundX } from 'lucide-react';
+import { ChevronDown, Lightbulb, UserRound, UserRoundCheck, UserRoundMinus, UserRoundX } from 'lucide-react';
 import { AreaChart } from '@/components/charts/area-chart';
 import { CHART_COLORS } from '@/components/charts/chart-colors';
 import { ChartCard } from '@/components/charts/chart-card';
@@ -164,8 +164,7 @@ export function InvestorsView({ data, extras, unit, search, today }: Props) {
         ))}
       </div>
 
-      <div className="grid min-w-0 gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="min-w-0 space-y-4">
+      <div className="min-w-0 space-y-4">
           <div className="grid gap-4 lg:grid-cols-2">
             <ChartCard
               className="lg:col-span-2"
@@ -348,23 +347,38 @@ export function InvestorsView({ data, extras, unit, search, today }: Props) {
           </ChartCard>
 
           <CohortTable cohorts={cohorts} medianDaysToFirst={data.medianDaysToFirst} />
-        </div>
-
-        <aside className={`${card} min-w-0`}>
-          <h3 className="text-sm font-medium">What to act on</h3>
-          {insights.length > 0 ? (
-            <ul className="mt-3 space-y-3">
+          <details className="group rounded-xl border border-line bg-surface">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-4 py-3 text-sm font-medium select-none [&::-webkit-details-marker]:hidden">
+              <div className="flex min-w-0 items-center gap-2.5">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
+                  <Lightbulb className="h-3.5 w-3.5" aria-hidden />
+                </span>
+                <span className="truncate">What to act on</span>
+                <span className="rounded-full bg-line/70 px-2 py-0.5 text-xs font-medium text-muted">
+                  {formatInt(insights.length)}
+                </span>
+              </div>
+              <div className="flex shrink-0 items-center gap-1.5 text-xs text-muted">
+                <span className="group-open:hidden">Off</span>
+                <span className="hidden text-emerald-600 dark:text-emerald-400 group-open:inline">Open</span>
+                <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" aria-hidden />
+              </div>
+            </summary>
+            <div className="border-t border-line px-4 pb-4 pt-3">
+              {insights.length > 0 ? (
+                <ul className="space-y-3">
               {insights.map((insight) => (
                 <li key={insight.text} className="flex items-start gap-2 text-sm">
                   <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${toneColor[insight.tone]}`} aria-hidden />
                   <span>{insight.text}</span>
                 </li>
               ))}
-            </ul>
-          ) : (
-            <p className="mt-3 text-sm text-muted">No priority actions for this snapshot.</p>
-          )}
-        </aside>
+                </ul>
+              ) : (
+                <p className="text-sm text-muted">No priority actions for this snapshot.</p>
+              )}
+            </div>
+          </details>
       </div>
     </div>
   );
