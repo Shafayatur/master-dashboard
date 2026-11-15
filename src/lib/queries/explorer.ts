@@ -212,6 +212,12 @@ LEFT JOIN (
         kind: 'money',
         sql: ltvSql,
       },
+      {
+        key: 'preferredTenure',
+        label: 'Preferred tenure (months)',
+        kind: 'int',
+        sql: `(SELECT split_part(p_ten."productDuration"::text, ' ', 1)::int FROM deposits d_ten JOIN "order" o_ten ON o_ten.id = d_ten."orderId" AND o_ten."deletedAt" IS NULL JOIN products p_ten ON p_ten.id = o_ten."productId" WHERE o_ten."userId" = u.id AND d_ten."deletedAt" IS NULL AND d_ten.status::text = 'approved' AND p_ten."productDuration" IS NOT NULL GROUP BY 1 ORDER BY SUM(d_ten.amount) DESC, 1 ASC LIMIT 1)`,
+      },
       WHO('active', "CASE WHEN sg.seg = 'active' THEN 'Yes' ELSE 'No' END", 'Active'),
       WHO('segment', 'sg.seg', 'Segment'),
     ],

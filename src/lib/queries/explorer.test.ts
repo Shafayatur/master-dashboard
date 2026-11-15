@@ -115,8 +115,12 @@ describe('loadExplorer', () => {
     expect((await loadExplorer(q, params('t=payouts'))).rows.map((x) => [x.id, x.status])).toEqual([[2, 'initiated'], [1, 'completed']]);
     const inv = await loadExplorer(q, params('t=investors&sort=lifetime'));
     expect(inv.rows.map((x) => [x.id, x.lifetime, x.investments])).toEqual([[2, 20000, 1], [1, 10050, 2]]);
+    expect(inv.rows.map((row) => [row.id, row.preferredTenure])).toEqual([[2, 12], [1, 6]]);
+    expect(inv.columns).toContainEqual({ key: 'preferredTenure', label: 'Preferred tenure (months)', kind: 'int' });
     expect(inv.columns.at(-1)).toEqual({ key: 'segment', label: 'Segment', kind: 'text' });
     expect(inv.columns.at(-2)).toEqual({ key: 'active', label: 'Active', kind: 'text' });
+    const investorExport = await exportExplorer(q, params('t=investors&sort=lifetime'));
+    expect(investorExport.columns).toContainEqual({ key: 'preferredTenure', label: 'Preferred tenure (months)', kind: 'int' });
     expect((await loadExplorer(q, params('t=orders&prod=2'))).rows.map((row) => row.id)).toEqual([2]);
     expect((await loadExplorer(q, params('t=orders&os=cancelled'))).total).toBe(3);
     expect((await loadExplorer(q, params('t=payouts&prod=2'))).total).toBe(0);

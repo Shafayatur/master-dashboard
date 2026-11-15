@@ -9,6 +9,7 @@ const COLUMNS: Column<InvestmentDepthInvestor>[] = [
   { header: 'Active', value: (row) => row.active, kind: 'text' },
   { header: 'Investments', value: (row) => row.investments, kind: 'int' },
   { header: 'Lifetime value', value: (row) => row.lifetimeValue, kind: 'money' },
+  { header: 'Preferred tenure (months)', value: (row) => row.preferredTenureMonths ?? '', kind: 'int' },
   { header: 'First investment date', value: (row) => row.firstInvestmentDate, kind: 'date' },
   { header: 'Latest investment date', value: (row) => row.latestInvestmentDate, kind: 'date' },
 ];

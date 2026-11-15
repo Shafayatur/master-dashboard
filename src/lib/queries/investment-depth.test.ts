@@ -31,6 +31,9 @@ beforeAll(async () => {
       (7, 'Closed only', '01700000007', 'closed@example.com', 'investor', NULL),
       (8, 'Not an investor', '01700000008', 'staff@example.com', 'internal-staff', NULL),
       (9, 'Deleted user', '01700000009', 'deleted@example.com', 'investor', '2026-01-01');
+    INSERT INTO products (id, name, "productDuration", "productReturnType", "isShariah") VALUES
+      (1, 'Six months', '6 Months', 'percentage', FALSE),
+      (2, 'Twelve months', '12 Months', 'fixed', TRUE);
     INSERT INTO "order" (id, status, "investmentDate", "userId", "deletedAt") VALUES
       (101, 'invested', '2026-01-01 12:00', 1, NULL),
       (201, 'invested', '2026-01-01 12:00', 2, NULL),
@@ -49,6 +52,14 @@ beforeAll(async () => {
       (701, 'closed', '2026-01-01 12:00', 7, NULL),
       (801, 'invested', '2026-01-01 12:00', 8, NULL),
       (901, 'invested', '2026-01-01 12:00', 9, NULL);
+    UPDATE "order" SET "productId" = CASE id
+      WHEN 101 THEN 1
+      WHEN 201 THEN 1 WHEN 202 THEN 2
+      WHEN 301 THEN 2 WHEN 302 THEN 1 WHEN 303 THEN 2
+      WHEN 401 THEN 1 WHEN 402 THEN 1 WHEN 403 THEN 1 WHEN 404 THEN 1 WHEN 405 THEN 2
+      WHEN 601 THEN 2 WHEN 602 THEN 2
+    END
+    WHERE id IN (101, 201, 202, 301, 302, 303, 401, 402, 403, 404, 405, 601, 602);
     INSERT INTO deposits (id, amount, status, "orderId", "deletedAt") VALUES
       (1, 300, 'approved', 101, NULL),
       (2, 100, 'approved', 201, NULL),
@@ -101,6 +112,14 @@ describe('investment depth', () => {
       [7, 'No'],
       [1, 'Yes'],
     ]);
+    expect(rows.map((row) => [row.userId, row.preferredTenureMonths])).toEqual([
+      [4, 6],
+      [3, 12],
+      [2, 6],
+      [6, 12],
+      [7, null],
+      [1, 6],
+    ]);
     expect(rows[3]).toMatchObject({
       userId: 6,
       investments: 1,
@@ -117,7 +136,7 @@ describe('investment depth', () => {
 
     const csv = investmentDepthExport(rows).toCsv();
     expect(csv.split('\r\n')[0]).toBe(
-      '\uFEFFUser ID,Name,Phone,Email,Active,Investments,Lifetime value,First investment date,Latest investment date',
+      '\uFEFFUser ID,Name,Phone,Email,Active,Investments,Lifetime value,Preferred tenure (months),First investment date,Latest investment date',
     );
     expect(csv).toContain('01700000004');
   });

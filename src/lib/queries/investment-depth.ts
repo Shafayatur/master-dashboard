@@ -48,6 +48,7 @@ export interface InvestmentDepthInvestor {
   active: 'Yes' | 'No';
   investments: number;
   lifetimeValue: number;
+  preferredTenureMonths: number | null;
   firstInvestmentDate: string;
   latestInvestmentDate: string;
 }
@@ -116,6 +117,16 @@ export async function listInvestmentDepth(
   FROM deposits d JOIN "order" o ON o.id = d."orderId" AND o."deletedAt" IS NULL
   WHERE d."deletedAt" IS NULL AND d.status::text = 'approved'
   GROUP BY o."userId"
+), preferred_tenure AS (
+  SELECT DISTINCT ON (o."userId")
+    o."userId",
+    split_part(p."productDuration"::text, ' ', 1)::int AS months
+  FROM deposits d
+  JOIN "order" o ON o.id = d."orderId" AND o."deletedAt" IS NULL
+  JOIN products p ON p.id = o."productId"
+  WHERE d."deletedAt" IS NULL AND d.status::text = 'approved' AND p."productDuration" IS NOT NULL
+  GROUP BY o."userId", split_part(p."productDuration"::text, ' ', 1)::int
+  ORDER BY o."userId", SUM(d.amount) DESC, split_part(p."productDuration"::text, ' ', 1)::int ASC
 )
 SELECT u.id AS user_id, COALESCE(u.name, '') AS name, COALESCE(u.phone, '') AS phone,
   COALESCE(u.email, '') AS email, investor_counts.investments,
@@ -124,11 +135,13 @@ SELECT u.id AS user_id, COALESCE(u.name, '') AS name, COALESCE(u.phone, '') AS p
     WHERE o2."userId" = u.id AND o2."deletedAt" IS NULL AND o2.status = 'invested'
   ) THEN 'Yes' ELSE 'No' END AS active,
   COALESCE(ltv.ltv, 0)::float8 AS lifetime_value,
+  preferred_tenure.months AS preferred_tenure_months,
   to_char(${dhakaTs('investor_counts.first_date')}::date, 'YYYY-MM-DD') AS first_investment_date,
   to_char(${dhakaTs('investor_counts.latest_date')}::date, 'YYYY-MM-DD') AS latest_investment_date
 FROM investor_counts
 JOIN "user" u ON u.id = investor_counts."userId"
 LEFT JOIN ltv ON ltv."userId" = investor_counts."userId"
+LEFT JOIN preferred_tenure ON preferred_tenure."userId" = investor_counts."userId"
 ${countFilter}
 ORDER BY investor_counts.investments DESC, lifetime_value DESC, u.id ASC
 LIMIT ${rowLimit}::int`,
@@ -142,6 +155,7 @@ LIMIT ${rowLimit}::int`,
     active: row.active === 'Yes' ? 'Yes' : 'No',
     investments: num(row.investments),
     lifetimeValue: num(row.lifetime_value),
+    preferredTenureMonths: row.preferred_tenure_months == null ? null : num(row.preferred_tenure_months),
     firstInvestmentDate: str(row.first_investment_date),
     latestInvestmentDate: str(row.latest_investment_date),
   }));
