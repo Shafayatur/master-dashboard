@@ -153,6 +153,31 @@ describe('loadExplorer', () => {
     expect((await loadExplorer(q, starter)).rows.map((row) => row.id)).toContain(32);
     expect((await loadExplorer(q, starter)).rows.map((row) => row.id)).not.toContain(33);
   });
+  it('uses pre-aggregated investor joins and keeps the tier count join minimal', async () => {
+    const statements: string[] = [];
+    const recordingQuery: QueryFn = async (sql, values = []) => {
+      statements.push(sql);
+      return q(sql, values);
+    };
+
+    await loadExplorer(
+      recordingQuery,
+      parseExplorerParams(new URLSearchParams('t=investors&tier=1_3l&p=lifetime'), TODAY),
+    );
+    expect(statements[0]).toContain('inv_ltv ON inv_ltv.user_id = u.id');
+    expect(statements[0]).not.toContain('inv_ord ON');
+    expect(statements[0]).not.toContain('inv_ten ON');
+    expect(statements[1]).toContain('inv_ltv ON inv_ltv.user_id = u.id');
+    expect(statements[1]).toContain('inv_ord ON inv_ord.user_id = u.id');
+    expect(statements[1]).toContain('inv_ten ON inv_ten.user_id = u.id');
+
+    statements.length = 0;
+    await loadExplorer(recordingQuery, parseExplorerParams(new URLSearchParams('t=investors&p=lifetime'), TODAY));
+    expect(statements[0]).not.toContain('inv_ltv ON');
+    expect(statements[1]).toContain('inv_ltv ON inv_ltv.user_id = u.id');
+    expect(statements[1]).toContain('inv_ord ON inv_ord.user_id = u.id');
+    expect(statements[1]).toContain('inv_ten ON inv_ten.user_id = u.id');
+  });
   it('filters investors by product, category, tenure, return type, and shariah product predicates', async () => {
     for (const filter of ['prod=2', 'cat=2', 'ten=12', 'rt=fixed', 'sh=yes']) {
       const result = await loadExplorer(q, params(`t=investors&${filter}`));

@@ -67,7 +67,33 @@ interface TableDef {
 const INVESTOR_JOIN = `JOIN "user" u ON u.id = o."userId" AND u."deletedAt" IS NULL AND u."userType"::text = 'investor'`;
 const ORDER_JOIN = `JOIN "order" o ON o.id = X."orderId" AND o."deletedAt" IS NULL`;
 const investorFirstDepJoin = `LEFT JOIN (SELECT o2."userId" AS user_id, MIN(d2."date") AS first_dep FROM deposits d2 JOIN "order" o2 ON o2.id = d2."orderId" WHERE d2."deletedAt" IS NULL AND o2."deletedAt" IS NULL AND d2.status::text = 'approved' GROUP BY o2."userId") fd ON fd.user_id = u.id`;
-const ltvSql = `(SELECT COALESCE(SUM(d.amount), 0)::float8 FROM deposits d JOIN "order" io ON io.id = d."orderId" AND io."deletedAt" IS NULL WHERE io."userId" = u.id AND d."deletedAt" IS NULL AND d.status::text = 'approved')`;
+const ltvSql = 'COALESCE(inv_ltv.lifetime, 0)::float8';
+const investorLtvJoin = `LEFT JOIN (
+  SELECT io."userId" AS user_id,
+    COALESCE(SUM(d.amount), 0)::float8 AS lifetime
+  FROM deposits d
+  JOIN "order" io ON io.id = d."orderId" AND io."deletedAt" IS NULL
+  WHERE d."deletedAt" IS NULL AND d.status::text = 'approved'
+  GROUP BY io."userId"
+) inv_ltv ON inv_ltv.user_id = u.id`;
+const investorExtraColumnsJoin = `LEFT JOIN (
+  SELECT io."userId" AS user_id,
+    COUNT(*)::int AS investments
+  FROM "order" io
+  WHERE io."deletedAt" IS NULL AND io.status::text IN ('invested', 'closed')
+  GROUP BY io."userId"
+) inv_ord ON inv_ord.user_id = u.id
+LEFT JOIN (
+  SELECT DISTINCT ON (o_ten."userId")
+    o_ten."userId" AS user_id,
+    split_part(p_ten."productDuration"::text, ' ', 1)::int AS preferred_tenure
+  FROM deposits d_ten
+  JOIN "order" o_ten ON o_ten.id = d_ten."orderId" AND o_ten."deletedAt" IS NULL
+  JOIN products p_ten ON p_ten.id = o_ten."productId"
+  WHERE d_ten."deletedAt" IS NULL AND d_ten.status::text = 'approved' AND p_ten."productDuration" IS NOT NULL
+  GROUP BY o_ten."userId", split_part(p_ten."productDuration"::text, ' ', 1)::int
+  ORDER BY o_ten."userId", SUM(d_ten.amount) DESC, split_part(p_ten."productDuration"::text, ' ', 1)::int ASC
+) inv_ten ON inv_ten.user_id = u.id`;
 const day = (col: string) => `to_char(${dhakaTs(col)}, 'YYYY-MM-DD')`;
 const maturityExpr = `COALESCE(sched.last_pay, COALESCE(o."investmentDate", o."createdAt") + (split_part(p."productDuration"::text, ' ', 1)::int * interval '1 month'))`;
 const WHO = (key: string, sql: string, label: string): Col => ({ key, label, kind: 'text', sql });
@@ -204,7 +230,7 @@ LEFT JOIN (
         key: 'investments',
         label: 'Investments',
         kind: 'int',
-        sql: `(SELECT COUNT(*)::int FROM "order" io WHERE io."userId" = u.id AND io."deletedAt" IS NULL AND io.status::text IN ('invested', 'closed'))`,
+        sql: 'COALESCE(inv_ord.investments, 0)::int',
       },
       {
         key: 'lifetime',
@@ -216,7 +242,7 @@ LEFT JOIN (
         key: 'preferredTenure',
         label: 'Preferred tenure (months)',
         kind: 'int',
-        sql: `(SELECT split_part(p_ten."productDuration"::text, ' ', 1)::int FROM deposits d_ten JOIN "order" o_ten ON o_ten.id = d_ten."orderId" AND o_ten."deletedAt" IS NULL JOIN products p_ten ON p_ten.id = o_ten."productId" WHERE o_ten."userId" = u.id AND d_ten."deletedAt" IS NULL AND d_ten.status::text = 'approved' AND p_ten."productDuration" IS NOT NULL GROUP BY 1 ORDER BY SUM(d_ten.amount) DESC, 1 ASC LIMIT 1)`,
+        sql: 'inv_ten.preferred_tenure',
       },
       WHO('active', "CASE WHEN sg.seg = 'active' THEN 'Yes' ELSE 'No' END", 'Active'),
       WHO('segment', 'sg.seg', 'Segment'),
@@ -279,9 +305,11 @@ function build(params: ExplorerParams, now: Date) {
   const baseFrom = params.table === 'investors'
     ? `"user" u ${segmentJoin}`
     : `${def.from} ${segmentJoin}`;
-  const from = params.filters.investorKind !== 'all'
-    ? `${baseFrom} ${investorFirstDepJoin}`
-    : baseFrom;
+  const firstDepositJoin = params.filters.investorKind !== 'all' ? ` ${investorFirstDepJoin}` : '';
+  const countFrom = `${baseFrom}${firstDepositJoin}${params.table === 'investors' && params.tier ? ` ${investorLtvJoin}` : ''}`;
+  const from = params.table === 'investors'
+    ? `${baseFrom}${firstDepositJoin} ${investorLtvJoin} ${investorExtraColumnsJoin}`
+    : `${baseFrom}${firstDepositJoin}`;
   const { start, end } = utcBounds(params.range);
   const hasInvestorKind = params.filters.investorKind !== 'all';
   const allRegistrations = params.table === 'investors'
@@ -298,10 +326,10 @@ function build(params: ExplorerParams, now: Date) {
   const conds = [...def.where, ...dateConds];
   if (params.table === 'investors' && params.tier) {
     const { min, max } = WEALTH_TIER_DEFS[params.tier];
-    const lowerBound = `${ltvSql} ${min === 0 ? '>' : '>='} ${p.add(min)}::float8`;
+    const lowerBound = `inv_ltv.lifetime ${min === 0 ? '>' : '>='} ${p.add(min)}::float8`;
     conds.push(max === null
       ? lowerBound
-      : `${lowerBound} AND ${ltvSql} < ${p.add(max)}::float8`);
+      : `${lowerBound} AND inv_ltv.lifetime < ${p.add(max)}::float8`);
   }
   if (hasInvestorKind) {
     conds.push(params.filters.investorKind === 'new'
@@ -328,7 +356,7 @@ function build(params: ExplorerParams, now: Date) {
   }
   const select = [...def.columns.map((c) => `${c.sql} AS "${c.key}"`), `${params.table === 'investors' ? 'u.id' : 'u.id'} AS "userId"`].join(',\n  ');
   const order = `"${params.sort}" ${params.dir === 'asc' ? 'ASC' : 'DESC'} NULLS LAST, "id" DESC`;
-  return { def, p, select, order, from, where: conds.join('\n  AND ') };
+  return { def, p, select, order, from, countFrom, where: conds.join('\n  AND ') };
 }
 
 function cells(def: TableDef, r: Record<string, unknown>): Record<string, CellValue> {
@@ -342,7 +370,7 @@ function cells(def: TableDef, r: Record<string, unknown>): Record<string, CellVa
 
 export async function loadExplorer(q: QueryFn, params: ExplorerParams, now: Date = new Date()): Promise<ExplorerResult> {
   const b = build(params, now);
-  const [countRow] = await q(`SELECT COUNT(*)::int AS n FROM ${b.from}\nWHERE ${b.where}`, b.p.values);
+  const [countRow] = await q(`SELECT COUNT(*)::int AS n FROM ${b.countFrom}\nWHERE ${b.where}`, b.p.values);
   const offset = (params.page - 1) * PAGE_SIZE;
   const rows = await q(
     `SELECT ${b.select}\nFROM ${b.from}\nWHERE ${b.where}\nORDER BY ${b.order}\nLIMIT ${PAGE_SIZE} OFFSET ${offset}`,
