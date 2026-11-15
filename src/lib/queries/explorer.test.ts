@@ -131,15 +131,18 @@ describe('loadExplorer', () => {
         (30,'Basic boundary','01711000030','basic@example.com','2020-01-01','investor'),
         (31,'Classic boundary','01711000031','classic@example.com','2020-01-01','investor'),
         (32,'Starter boundary','01711000032','starter@example.com','2020-01-01','investor'),
-        (33,'No approved investment','01711000033','zero@example.com','2020-01-01','investor');
+        (33,'No approved investment','01711000033','zero@example.com','2020-01-01','investor'),
+        (34,'Cancelled order investor','01711000034','cancelled@example.com','2020-01-01','investor');
       INSERT INTO "order" (id, status, quantity, "totalAmount", "investmentDate", "createdAt", "userId", "productId") VALUES
         (30,'invested',1,100000,'2020-01-01','2020-01-01',30,1),
         (31,'invested',1,300000,'2020-01-01','2020-01-01',31,1),
-        (32,'invested',1,99999,'2020-01-01','2020-01-01',32,1);
+        (32,'invested',1,99999,'2020-01-01','2020-01-01',32,1),
+        (33,'cancelled',1,50000,'2020-01-01','2020-01-01',34,1);
       INSERT INTO deposits (id, "date", amount, "paymentMethod", status, "orderId") VALUES
         (30,'2020-01-01',100000,'cash','approved',30),
         (31,'2020-01-01',300000,'cash','approved',31),
-        (32,'2020-01-01',99999,'cash','approved',32);
+        (32,'2020-01-01',99999,'cash','approved',32),
+        (33,'2020-01-01',50000,'cash','approved',33);
     `);
 
     const tier = parseExplorerParams(new URLSearchParams('t=investors&tier=1_3l&p=lifetime'), TODAY);
@@ -152,6 +155,7 @@ describe('loadExplorer', () => {
     const starter = parseExplorerParams(new URLSearchParams('t=investors&tier=0_1l&p=lifetime'), TODAY);
     expect((await loadExplorer(q, starter)).rows.map((row) => row.id)).toContain(32);
     expect((await loadExplorer(q, starter)).rows.map((row) => row.id)).not.toContain(33);
+    expect((await loadExplorer(q, starter)).rows.map((row) => row.id)).not.toContain(34);
   });
   it('uses pre-aggregated investor joins and keeps the tier count join minimal', async () => {
     const statements: string[] = [];

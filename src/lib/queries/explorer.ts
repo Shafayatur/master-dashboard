@@ -73,7 +73,7 @@ const investorLtvJoin = `LEFT JOIN (
     COALESCE(SUM(d.amount), 0)::float8 AS lifetime
   FROM deposits d
   JOIN "order" io ON io.id = d."orderId" AND io."deletedAt" IS NULL
-  WHERE d."deletedAt" IS NULL AND d.status::text = 'approved'
+  WHERE d."deletedAt" IS NULL AND d.status::text = 'approved' AND io.status::text IN ('invested', 'closed')
   GROUP BY io."userId"
 ) inv_ltv ON inv_ltv.user_id = u.id`;
 const investorExtraColumnsJoin = `LEFT JOIN (
@@ -90,7 +90,7 @@ LEFT JOIN (
   FROM deposits d_ten
   JOIN "order" o_ten ON o_ten.id = d_ten."orderId" AND o_ten."deletedAt" IS NULL
   JOIN products p_ten ON p_ten.id = o_ten."productId"
-  WHERE d_ten."deletedAt" IS NULL AND d_ten.status::text = 'approved' AND p_ten."productDuration" IS NOT NULL
+  WHERE d_ten."deletedAt" IS NULL AND d_ten.status::text = 'approved' AND o_ten.status::text IN ('invested', 'closed') AND p_ten."productDuration" IS NOT NULL
   GROUP BY o_ten."userId", split_part(p_ten."productDuration"::text, ' ', 1)::int
   ORDER BY o_ten."userId", SUM(d_ten.amount) DESC, split_part(p_ten."productDuration"::text, ' ', 1)::int ASC
 ) inv_ten ON inv_ten.user_id = u.id`;

@@ -77,18 +77,14 @@ export interface InvestorsData {
 const num = (v: unknown): number => Number(v ?? 0);
 const pct = (a: number, b: number): number => (b > 0 ? (a / b) * 100 : 0);
 
-/** Approved lifetime deposits per investor. */
+/** Approved lifetime deposits on invested or closed orders per investor. */
 const LTV = `ltv AS (
-  SELECT o."userId", SUM(d.amount) AS ltv
-  FROM deposits d JOIN "order" o ON o.id = d."orderId" AND o."deletedAt" IS NULL
-  WHERE d."deletedAt" IS NULL AND d.status::text = 'approved' GROUP BY o."userId"
-)`;
-const SEGMENT_LTV = `ltv AS (
   SELECT o."userId", SUM(d.amount) AS ltv
   FROM deposits d JOIN "order" o ON o.id = d."orderId" AND o."deletedAt" IS NULL
   WHERE d."deletedAt" IS NULL AND d.status::text = 'approved' AND o.status::text IN ('invested', 'closed')
   GROUP BY o."userId"
 )`;
+const SEGMENT_LTV = LTV;
 const INVESTOR = `u."deletedAt" IS NULL AND u."userType"::text = 'investor'`;
 
 /**
