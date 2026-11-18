@@ -81,11 +81,11 @@ const pct = (a: number, b: number): number => (b > 0 ? (a / b) * 100 : 0);
 const LTV = `ltv AS (
   SELECT o."userId", SUM(d.amount) AS ltv
   FROM deposits d JOIN "order" o ON o.id = d."orderId" AND o."deletedAt" IS NULL
-  WHERE d."deletedAt" IS NULL AND d.status::text = 'approved' AND o.status::text IN ('invested', 'closed')
+  WHERE d."deletedAt" IS NULL AND d.status = 'approved' AND o.status IN ('invested', 'closed')
   GROUP BY o."userId"
 )`;
 const SEGMENT_LTV = LTV;
-const INVESTOR = `u."deletedAt" IS NULL AND u."userType"::text = 'investor'`;
+const INVESTOR = `u."deletedAt" IS NULL AND u."userType" = 'investor'`;
 
 /**
  * Snapshot as of `now`. Only 'invested' (running) and 'closed' (finished) orders count as investments.
@@ -103,7 +103,7 @@ export async function segments(q: QueryFn, now: Date, t: Thresholds = DEFAULT_TH
   SELECT o."userId", o.status::text AS status,
     COALESCE(s.last_pay, COALESCE(o."investmentDate", o."createdAt") + (split_part(p."productDuration"::text, ' ', 1)::int * interval '1 month')) AS maturity
   FROM "order" o JOIN products p ON p.id = o."productId" LEFT JOIN sched s ON s."orderId" = o.id
-  WHERE o."deletedAt" IS NULL AND o.status::text IN ('invested', 'closed')
+  WHERE o."deletedAt" IS NULL AND o.status IN ('invested', 'closed')
 ), ${perInvestorCte(nowTs)}, ${SEGMENT_LTV}
 SELECT seg, COUNT(*)::int AS investors, COALESCE(SUM(v), 0)::float8 AS lifetime_value FROM (
   SELECT COALESCE(l.ltv, 0) AS v, ${segmentCase(nowTs, recent, cooling)} AS seg
@@ -165,7 +165,7 @@ SELECT COALESCE(SUM(ltv), 0)::float8 AS total,
 const FIRST_DEP = `fd AS MATERIALIZED (
   SELECT o."userId", MIN(d."date") AS first_dep
   FROM deposits d JOIN "order" o ON o.id = d."orderId" AND o."deletedAt" IS NULL
-  WHERE d."deletedAt" IS NULL AND d.status::text = 'approved' GROUP BY o."userId"
+  WHERE d."deletedAt" IS NULL AND d.status = 'approved' GROUP BY o."userId"
 )`;
 
 /** Registration cohorts of the last 12 Dhaka months and how fast each converted to a first approved deposit. */

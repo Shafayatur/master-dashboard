@@ -5,7 +5,7 @@ export function perInvestorCte(nowTs: string): string {
     BOOL_OR(ord.status = 'invested') AS has_active,
     MAX(ord.maturity) FILTER (WHERE ord.status = 'closed') AS last_maturity
   FROM "user" u LEFT JOIN ord ON ord."userId" = u.id
-  WHERE u."deletedAt" IS NULL AND u."userType"::text = 'investor'
+  WHERE u."deletedAt" IS NULL AND u."userType" = 'investor'
   GROUP BY u.id
 )`;
 }

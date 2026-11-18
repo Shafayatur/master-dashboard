@@ -360,6 +360,20 @@ describe('loadHome: recent activity', () => {
 });
 
 describe('loadHome: output shape', () => {
+  it('handles today, yesterday, last30, and last90 presets without correlating first_dep to raw_base', async () => {
+    const queries: string[] = [];
+    const trackedQuery: QueryFn = async (sql, params) => {
+      queries.push(sql);
+      return q(sql, params);
+    };
+    for (const preset of ['today', 'yesterday', 'last30', 'last90'] as const) {
+      const f = parseFilters(new URLSearchParams(`p=${preset}`), TODAY);
+      const res = await loadHome({ ...deps, q: trackedQuery }, f, TODAY, NOW);
+      expect(res.bucket).toBe('day');
+    }
+    expect(queries.some((sql) => sql.includes('SELECT DISTINCT "userId" FROM raw_base'))).toBe(false);
+  });
+
   it('is plain JSON (safe for unstable_cache)', async () => {
     const d = await home();
     expect(JSON.parse(JSON.stringify(d))).toEqual(d);

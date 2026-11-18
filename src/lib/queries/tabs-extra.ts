@@ -327,11 +327,11 @@ async function registrationsSeries(
   SELECT o."userId", MIN(d."date") AS first_dep
   FROM deposits d
   JOIN "order" o ON o.id = d."orderId" AND o."deletedAt" IS NULL
-  WHERE d."deletedAt" IS NULL AND d.status::text = 'approved'
+  WHERE d."deletedAt" IS NULL AND d.status = 'approved'
   GROUP BY o."userId"
 ), u_filtered AS MATERIALIZED (
   SELECT u.id, u."createdAt" FROM "user" u
-  WHERE u."deletedAt" IS NULL AND u."userType"::text = 'investor'
+  WHERE u."deletedAt" IS NULL AND u."userType" = 'investor'
     AND u."createdAt" >= ${startParam}::timestamp AND u."createdAt" < ${endParam}::timestamp
 ), joined AS MATERIALIZED (
   SELECT u_filtered.id, u_filtered."createdAt", fd."userId" AS fd_user_id
@@ -373,7 +373,7 @@ export async function loadInvestorsExtras(q: QueryFn, today: string, range: Date
     registrationsSeries(q, range, bucket),
     q(
       `SELECT ${bucketOf('month', 'u."createdAt"')} AS month, COUNT(*)::int AS n FROM "user" u
-WHERE u."deletedAt" IS NULL AND u."userType"::text = 'investor'
+WHERE u."deletedAt" IS NULL AND u."userType" = 'investor'
   AND u."createdAt" >= ${regP.add(start)}::timestamp AND u."createdAt" < ${regP.add(end)}::timestamp GROUP BY 1`,
       regP.values,
     ),
@@ -381,7 +381,7 @@ WHERE u."deletedAt" IS NULL AND u."userType"::text = 'investor'
       `SELECT ${bucketOf('month', 'f.first_dep')} AS month, COUNT(*)::int AS n FROM (
   SELECT o."userId", MIN(d."date") AS first_dep
   FROM deposits d JOIN "order" o ON o.id = d."orderId" AND o."deletedAt" IS NULL ${investorJoin('o."userId"')}
-  WHERE d."deletedAt" IS NULL AND d.status::text = 'approved'
+  WHERE d."deletedAt" IS NULL AND d.status = 'approved'
   GROUP BY o."userId"
 ) f WHERE f.first_dep >= ${firstP.add(start)}::timestamp AND f.first_dep < ${firstP.add(end)}::timestamp GROUP BY 1`,
       firstP.values,

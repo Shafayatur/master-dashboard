@@ -1,7 +1,7 @@
 import 'server-only';
 import { addMonths, startOfMonth } from '@/lib/filters/dates';
 import { parseFilters, type Filters } from '@/lib/filters/schema';
-import type { Attention, Bucket, CommandCenterData } from '@/lib/dashboard/types';
+import type { Attention, Bucket, CommandCenterData, SalesKpis } from '@/lib/dashboard/types';
 import { dhakaTs } from '@/lib/time';
 import { segments, type SegmentRow } from './investors';
 import {
@@ -58,7 +58,7 @@ export type HomeData = CommandCenterData & {
 /** Dhaka bucket label (first day of the day/month) of a stored UTC timestamp column. `bucket` is a typed constant, never user input. */
 export const bucketOf = (bucket: Bucket, col: string): string => `to_char(date_trunc('${bucket}', ${dhakaTs(col)}), 'YYYY-MM-DD')`;
 
-const INVESTOR = `u."deletedAt" IS NULL AND u."userType"::text = 'investor'`;
+const INVESTOR = `u."deletedAt" IS NULL AND u."userType" = 'investor'`;
 
 // ------------------------------------------------------------------ sparklines
 
@@ -69,41 +69,72 @@ interface SalesBucket {
   investors: number;
 }
 
-/** Approved-by-filter sales, distinct tickets and distinct investors per bucket (every dashboard filter applies). */
-async function salesBuckets(q: QueryFn, f: Filters, bucket: Bucket): Promise<Map<string, SalesBucket>> {
-  const p = new Params();
-  const b = salesBase(f, f.range, p);
-  const rows = await q(
-    `WITH ${b.cte}
-SELECT ${bucketOf(bucket, 'dep_date')} AS label, SUM(amount)::float8 AS sales,
-  COALESCE(SUM(amount) FILTER (WHERE payment_method = 'reinvest'), 0)::float8 AS reinvest,
-  COUNT(DISTINCT "orderId")::int AS tickets, COUNT(DISTINCT "userId")::int AS investors
-FROM base GROUP BY 1`,
-    p.values,
-  );
-  return new Map(rows.map((r) => [String(r.label), {
-    sales: num(r.sales),
-    reinvest: num(r.reinvest),
-    tickets: num(r.tickets),
-    investors: num(r.investors),
-  }]));
+interface CombinedSalesResult {
+  buckets: Map<string, SalesBucket>;
+  newInvestors: Map<string, number>;
+  kpis: SalesKpis;
 }
 
-/**
- * New investors per bucket: an investor with a deposit in the filtered range is counted once, in the bucket of their
- * first-ever approved deposit, when that falls inside the range. The buckets therefore add up to the KPI "new investors".
- */
-async function newInvestorBuckets(q: QueryFn, f: Filters, bucket: Bucket): Promise<Map<string, number>> {
+/** Sales buckets, new-investor buckets, and current-period KPIs in one CTE pass. */
+async function salesBucketsAndKpis(q: QueryFn, f: Filters, bucket: Bucket): Promise<CombinedSalesResult> {
   const p = new Params();
   const b = salesBase(f, f.range, p, false, { includeFirstDeposit: true });
   const rows = await q(
     `WITH ${b.cte}
-SELECT label, COUNT(*)::int AS n FROM (
-  SELECT DISTINCT "userId", ${bucketOf(bucket, 'first_dep')} AS label FROM base WHERE first_dep >= ${b.s} AND first_dep < ${b.e}
-) t GROUP BY label`,
+SELECT
+  'bucket' AS kind,
+  ${bucketOf(bucket, 'dep_date')} AS label,
+  SUM(amount)::float8 AS sales,
+  COALESCE(SUM(amount) FILTER (WHERE payment_method = 'reinvest'), 0)::float8 AS reinvest,
+  0::int AS deposits,
+  COUNT(DISTINCT "orderId")::int AS tickets,
+  COUNT(DISTINCT "userId")::int AS investors,
+  0::int AS new_investors,
+  0::int AS old_investors
+FROM base GROUP BY 1, 2
+UNION ALL
+SELECT
+  'new_bucket' AS kind,
+  label,
+  0::float8 AS sales,
+  0::float8 AS reinvest,
+  0::int AS deposits,
+  0::int AS tickets,
+  0::int AS investors,
+  COUNT(*)::int AS new_investors,
+  0::int AS old_investors
+FROM (
+  SELECT DISTINCT "userId", ${bucketOf(bucket, 'first_dep')} AS label
+  FROM base WHERE first_dep >= ${b.s} AND first_dep < ${b.e}
+) t GROUP BY 1, 2
+UNION ALL
+SELECT
+  'kpis' AS kind,
+  '' AS label,
+  COALESCE(SUM(amount), 0)::float8 AS sales,
+  0::float8 AS reinvest,
+  COUNT(*)::int AS deposits,
+  COUNT(DISTINCT "orderId")::int AS tickets,
+  COUNT(DISTINCT "userId")::int AS investors,
+  COUNT(DISTINCT "userId") FILTER (WHERE first_dep >= ${b.s} AND first_dep < ${b.e})::int AS new_investors,
+  COUNT(DISTINCT "userId") FILTER (WHERE first_dep < ${b.s})::int AS old_investors
+FROM base`,
     p.values,
   );
-  return new Map(rows.map((r) => [String(r.label), num(r.n)]));
+  const buckets = new Map<string, SalesBucket>();
+  const newInvestors = new Map<string, number>();
+  let kpis: SalesKpis = { sales: 0, deposits: 0, ticketsInvested: 0, uniqueInvestors: 0, newInvestors: 0, oldInvestors: 0 };
+  for (const r of rows) {
+    const kind = String(r.kind);
+    if (kind === 'bucket') {
+      buckets.set(String(r.label), { sales: num(r.sales), reinvest: num(r.reinvest), tickets: num(r.tickets), investors: num(r.investors) });
+    } else if (kind === 'new_bucket') {
+      newInvestors.set(String(r.label), num(r.new_investors));
+    } else if (kind === 'kpis') {
+      kpis = { sales: num(r.sales), deposits: num(r.deposits), ticketsInvested: num(r.tickets), uniqueInvestors: num(r.investors), newInvestors: num(r.new_investors), oldInvestors: num(r.old_investors) };
+    }
+  }
+  return { buckets, newInvestors, kpis };
 }
 
 /** Registrations ignore the product/deposit filters (a signup has no product). */
@@ -135,7 +166,7 @@ async function bookedBuckets(q: QueryFn, f: Filters, bucket: Bucket): Promise<Ma
   ];
   const rows = await q(
     `SELECT ${bucketOf(bucket, 'o."createdAt"')} AS label, COUNT(*)::int AS booked,
-  COUNT(*) FILTER (WHERE o.status::text = 'cancelled')::int AS cancelled
+  COUNT(*) FILTER (WHERE o.status = 'cancelled')::int AS cancelled
 FROM "order" o JOIN products p ON p.id = o."productId" ${investorJoin('o."userId"')}
 WHERE ${preds.join(' AND ')} GROUP BY 1`,
     p.values,
@@ -151,7 +182,7 @@ async function payoutBuckets(q: QueryFn, f: Filters, bucket: Bucket): Promise<Ma
   const rows = await q(
     `SELECT ${bucketOf(bucket, 'r."date"')} AS label, SUM(r.amount)::float8 AS amount
 FROM returns r JOIN "order" o ON o.id = r."orderId" AND o."deletedAt" IS NULL ${investorJoin('o."userId"')}
-WHERE r."deletedAt" IS NULL AND r.status::text = 'completed'
+WHERE r."deletedAt" IS NULL AND r.status = 'completed'
   AND r."date" >= ${p.add(start)}::timestamp AND r."date" < ${p.add(end)}::timestamp
   ${excludeReinvest} GROUP BY 1`,
     p.values,
@@ -169,9 +200,9 @@ export async function salesVsReinvest(q: QueryFn, today: string): Promise<HomeDa
   const rows = await q(
     `WITH ${b.cte}
 SELECT ${bucketOf('month', 'b.dep_date')} AS month,
-  COALESCE(SUM(b.amount) FILTER (WHERE d."paymentMethod"::text = 'reinvest'), 0)::float8 AS reinvest,
-  COALESCE(SUM(b.amount) FILTER (WHERE d."paymentMethod"::text IS DISTINCT FROM 'reinvest'), 0)::float8 AS other
-FROM base b JOIN deposits d ON d.id = b.dep_id GROUP BY 1`,
+  COALESCE(SUM(b.amount) FILTER (WHERE b.payment_method = 'reinvest'), 0)::float8 AS reinvest,
+  COALESCE(SUM(b.amount) FILTER (WHERE b.payment_method IS DISTINCT FROM 'reinvest'), 0)::float8 AS other
+FROM base b GROUP BY 1`,
     p.values,
   );
   return Array.from({ length: 6 }, (_, i) => {
@@ -203,7 +234,7 @@ export async function salesByProject(q: QueryFn, f: Filters): Promise<DonutRow[]
   const rows = await q(
     `WITH ${b.cte}
 SELECT p.id::text AS key, p.name AS label, SUM(b.amount)::float8 AS value
-FROM base b JOIN "order" o ON o.id = b."orderId" JOIN products p ON p.id = o."productId"
+FROM base b JOIN products p ON p.id = b."productId"
 GROUP BY p.id, p.name ORDER BY value DESC, p.id`,
     p.values,
   );
@@ -220,8 +251,8 @@ export async function salesByCategory(q: QueryFn, f: Filters): Promise<DonutRow[
   const rows = await q(
     `WITH ${b.cte}
 SELECT c.id::text AS key, c.name AS label, SUM(b.amount)::float8 AS value
-FROM base b JOIN "order" o ON o.id = b."orderId"
-JOIN category_products cp ON cp."productsId" = o."productId"
+FROM base b
+JOIN category_products cp ON cp."productsId" = b."productId"
 JOIN categories c ON c.id = cp."categoriesId" AND c."deletedAt" IS NULL
 GROUP BY c.id, c.name ORDER BY value DESC, c.id`,
     p.values,
@@ -242,7 +273,7 @@ export async function payoutsByCategory(q: QueryFn, f: Filters): Promise<DonutRo
 FROM returns r JOIN "order" o ON o.id = r."orderId" AND o."deletedAt" IS NULL ${investorJoin('o."userId"')}
 JOIN category_products cp ON cp."productsId" = o."productId"
 JOIN categories c ON c.id = cp."categoriesId" AND c."deletedAt" IS NULL
-WHERE r."deletedAt" IS NULL AND r.status::text = 'completed'
+WHERE r."deletedAt" IS NULL AND r.status = 'completed'
   AND r."date" >= ${p.add(start)}::timestamp AND r."date" < ${p.add(end)}::timestamp
   ${excludeReinvest}
 GROUP BY c.id, c.name ORDER BY value DESC, c.id`,
@@ -257,11 +288,14 @@ GROUP BY c.id, c.name ORDER BY value DESC, c.id`,
 export async function investorCounts(q: QueryFn): Promise<{ registered: number; everInvested: number }> {
   const [r] = await q(
     `SELECT COUNT(*)::int AS registered,
-  COUNT(*) FILTER (WHERE EXISTS (
-    SELECT 1 FROM deposits d JOIN "order" o ON o.id = d."orderId" AND o."deletedAt" IS NULL
-    WHERE o."userId" = u.id AND d."deletedAt" IS NULL AND d.status::text = 'approved'
-  ))::int AS ever_invested
-FROM "user" u WHERE ${INVESTOR}`,
+  COUNT(inv."userId")::int AS ever_invested
+FROM "user" u
+LEFT JOIN (
+  SELECT DISTINCT o."userId"
+  FROM deposits d JOIN "order" o ON o.id = d."orderId" AND o."deletedAt" IS NULL
+  WHERE d."deletedAt" IS NULL AND d.status = 'approved'
+) inv ON inv."userId" = u.id
+WHERE ${INVESTOR}`,
   );
   return { registered: num(r?.registered), everInvested: num(r?.ever_invested) };
 }
@@ -279,13 +313,13 @@ export async function recentActivity(q: QueryFn, now: Date): Promise<ActivityIte
   (SELECT 'deposit' AS kind, d."date" AS happened, 'Deposit ' || d.status::text AS title, COALESCE(u.name, '') AS name,
       u.id AS user_id, d.amount::float8 AS amount, d.status::text AS status, o.id AS order_id, d.id AS ref
     FROM deposits d JOIN "order" o ON o.id = d."orderId" AND o."deletedAt" IS NULL ${investorJoin('o."userId"')}
-    WHERE d."deletedAt" IS NULL AND d.status::text IN ('approved', 'pending') AND d."date" <= ${nowTs}
+    WHERE d."deletedAt" IS NULL AND d.status IN ('approved', 'pending') AND d."date" <= ${nowTs}
     ORDER BY d."date" DESC, d.id DESC LIMIT ${RECENT_LIMIT})
   UNION ALL
   (SELECT 'payout' AS kind, r."date" AS happened, 'Payout completed' AS title, COALESCE(u.name, '') AS name,
       u.id AS user_id, r.amount::float8 AS amount, r.status::text AS status, o.id AS order_id, r.id AS ref
     FROM returns r JOIN "order" o ON o.id = r."orderId" AND o."deletedAt" IS NULL ${investorJoin('o."userId"')}
-    WHERE r."deletedAt" IS NULL AND r.status::text = 'completed' AND r."date" <= ${nowTs}
+    WHERE r."deletedAt" IS NULL AND r.status = 'completed' AND r."date" <= ${nowTs}
     ORDER BY r."date" DESC, r.id DESC LIMIT ${RECENT_LIMIT})
   UNION ALL
   (SELECT 'registration' AS kind, u."createdAt" AS happened, 'New registration' AS title, COALESCE(u.name, '') AS name,
@@ -296,7 +330,7 @@ export async function recentActivity(q: QueryFn, now: Date): Promise<ActivityIte
   (SELECT 'booking' AS kind, o."createdAt" AS happened, 'Ticket ' || o.status::text AS title, COALESCE(u.name, '') AS name,
       u.id AS user_id, o."totalAmount"::float8 AS amount, o.status::text AS status, o.id AS order_id, o.id AS ref
     FROM "order" o ${investorJoin('o."userId"')}
-    WHERE o."deletedAt" IS NULL AND o.status::text IN ('booked', 'verifying') AND o."createdAt" <= ${nowTs}
+    WHERE o."deletedAt" IS NULL AND o.status IN ('booked', 'verifying') AND o."createdAt" <= ${nowTs}
     ORDER BY o."createdAt" DESC, o.id DESC LIMIT ${RECENT_LIMIT})
 ) t ORDER BY happened DESC, kind, ref DESC LIMIT ${RECENT_LIMIT}`,
     [pgTs(now)],
@@ -348,27 +382,28 @@ export async function loadHome(
   const { q } = deps;
   const bucket = bucketFor(f.range);
   const labels = bucketLabels(f.range, bucket);
-  const salesPromise = salesBuckets(q, f, bucket);
+  const combinedSalesPromise = salesBucketsAndKpis(q, f, bucket);
   const regsPromise = registrationBuckets(q, f, bucket);
   const bookedPromise = bookedBuckets(q, f, bucket);
   const snapshotPromise = cachedSnapshot ? Promise.resolve(cachedSnapshot) : loadHomeSnapshot(q, today, now);
-  const salesSeriesPromise: Promise<Map<string, SalesBucketValue>> = salesPromise.then(
-    (sales) => new Map([...sales].map(([label, row]) => [label, { value: row.sales, reinvest: row.reinvest }])),
+  const salesSeriesPromise: Promise<Map<string, SalesBucketValue>> = combinedSalesPromise.then(
+    ({ buckets }) => new Map([...buckets].map(([label, row]) => [label, { value: row.sales, reinvest: row.reinvest }])),
   );
+  const currentSalesKpisPromise: Promise<SalesKpis> = combinedSalesPromise.then(({ kpis }) => kpis);
   const currentPeriodCounts: Promise<PeriodKpiCounts> = Promise.all([regsPromise, bookedPromise]).then(([regs, booked]) => ({
     registrations: [...regs.values()].reduce((sum, n) => sum + n, 0),
     ticketsBooked: [...booked.values()].reduce((sum, bucket) => sum + bucket.booked, 0),
     ticketsCancelled: [...booked.values()].reduce((sum, bucket) => sum + bucket.cancelled, 0),
   }));
-  const [snapshot, base, sales, fresh, regs, booked, paid, byProject, byCategory, payByCategory] = await Promise.all([
+  const [snapshot, base, combinedSales, regs, booked, paid, byProject, byCategory, payByCategory] = await Promise.all([
     snapshotPromise,
     loadCommandCenter(deps, f, today, now, {
       attention: snapshotPromise.then((snapshot) => snapshot.attention),
       currentSales: salesSeriesPromise,
       currentPeriodCounts,
+      currentSalesKpis: currentSalesKpisPromise,
     }),
-    salesPromise,
-    newInvestorBuckets(q, f, bucket),
+    combinedSalesPromise,
     regsPromise,
     bookedPromise,
     payoutBuckets(q, f, bucket),
@@ -376,6 +411,7 @@ export async function loadHome(
     salesByCategory(q, f),
     payoutsByCategory(q, f),
   ]);
+  const { buckets: sales, newInvestors: fresh } = combinedSales;
   const zero: SalesBucket = { sales: 0, reinvest: 0, tickets: 0, investors: 0 };
   const perBucket = labels.map((l) => sales.get(l) ?? zero);
   return {

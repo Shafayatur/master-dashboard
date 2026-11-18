@@ -29,7 +29,7 @@ export function utcBounds(r: DateRange): { start: string; end: string } {
 
 /** Real investors only (staff/admin accounts excluded). */
 export const investorJoin = (userKey: string, alias = 'u'): string =>
-  `JOIN "user" ${alias} ON ${alias}.id = ${userKey} AND ${alias}."deletedAt" IS NULL AND ${alias}."userType"::text = 'investor'`;
+  `JOIN "user" ${alias} ON ${alias}.id = ${userKey} AND ${alias}."deletedAt" IS NULL AND ${alias}."userType" = 'investor'`;
 
 /** Filters that describe the product/order (aliases: o = "order", p = products). */
 export function productPredicates(
@@ -44,17 +44,16 @@ export function productPredicates(
     );
   }
   if (f.tenures.length) out.push(`split_part(p."productDuration"::text, ' ', 1)::int = ANY(${p.add(f.tenures)}::int[])`);
-  if (f.returnTypes.length) out.push(`p."productReturnType"::text = ANY(${p.add(f.returnTypes)}::text[])`);
+  if (f.returnTypes.length) out.push(`p."productReturnType" IN (${f.returnTypes.map((value) => p.add(value)).join(', ')})`);
   if (f.shariah !== 'all') out.push(`p."isShariah" = ${f.shariah === 'yes' ? 'TRUE' : 'FALSE'}`);
-  if (f.orderStatus.length) out.push(`o.status::text = ANY(${p.add(f.orderStatus)}::text[])`);
+  if (f.orderStatus.length) out.push(`o.status IN (${f.orderStatus.map((value) => p.add(value)).join(', ')})`);
   return out;
 }
 
 const FIRST_DEPOSIT = `first_dep AS MATERIALIZED (
   SELECT o2."userId", MIN(d2."date") AS first_dep
   FROM deposits d2 JOIN "order" o2 ON o2.id = d2."orderId"
-  WHERE d2."deletedAt" IS NULL AND o2."deletedAt" IS NULL AND d2.status::text = 'approved'
-    AND o2."userId" IN (SELECT DISTINCT "userId" FROM raw_base)
+  WHERE d2."deletedAt" IS NULL AND o2."deletedAt" IS NULL AND d2.status = 'approved'
   GROUP BY o2."userId"
 )`;
 
@@ -88,15 +87,15 @@ export function salesBase(f: Filters, r: DateRange, p: Params, plain = false, op
   );
   const basePreds = [`d."deletedAt" IS NULL`, `d."date" >= ${s}`, `d."date" < ${e}`];
   if (plain) {
-    basePreds.push(`d.status::text = 'approved'`);
+    basePreds.push(`d.status = 'approved'`);
   } else {
-    basePreds.push(`d.status::text = ANY(${p.add(f.depositStatus)}::text[])`);
-    if (f.paymentMethod.length) basePreds.push(`d."paymentMethod"::text = ANY(${p.add(f.paymentMethod)}::text[])`);
-    if (f.excludeReinvest) basePreds.push(`d."paymentMethod"::text <> 'reinvest'`);
+    basePreds.push(`d.status IN (${f.depositStatus.map((value) => p.add(value)).join(', ')})`);
+    if (f.paymentMethod.length) basePreds.push(`d."paymentMethod" IN (${f.paymentMethod.map((value) => p.add(value)).join(', ')})`);
+    if (f.excludeReinvest) basePreds.push(`d."paymentMethod" <> 'reinvest'`);
     basePreds.push(...productPredicates(f, p));
   }
 
-  const rawBase = `SELECT d.id AS dep_id, d.amount, d."paymentMethod"::text AS payment_method, d."orderId", d."date" AS dep_date, o."userId"
+  const rawBase = `SELECT d.id AS dep_id, d.amount, d."paymentMethod"::text AS payment_method, d."orderId", d."date" AS dep_date, o."userId", o."productId"
   FROM deposits d
   JOIN "order" o ON o.id = d."orderId" AND o."deletedAt" IS NULL
   JOIN products p ON p.id = o."productId"
@@ -119,12 +118,12 @@ base AS (SELECT * FROM raw_base)`;
     cte = `raw_base AS MATERIALIZED (${rawBase}),
 ${FIRST_DEPOSIT},
 joined_base AS MATERIALIZED (
-  SELECT rb.dep_id, rb.amount, rb.payment_method, rb."orderId", rb.dep_date, rb."userId", fd.first_dep
+  SELECT rb.dep_id, rb.amount, rb.payment_method, rb."orderId", rb.dep_date, rb."userId", rb."productId", fd.first_dep
   FROM raw_base rb
   FULL OUTER JOIN first_dep fd ON fd."userId" = rb."userId"
 ),
 base AS (
-  SELECT dep_id, amount, payment_method, "orderId", dep_date, "userId", first_dep
+  SELECT dep_id, amount, payment_method, "orderId", dep_date, "userId", "productId", first_dep
   FROM joined_base
   WHERE dep_id IS NOT NULL${investorKindPred ? ` AND ${investorKindPred}` : ''}
 )`;

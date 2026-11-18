@@ -48,7 +48,7 @@ export async function registrations(q: QueryFn, r: DateRange): Promise<number> {
   const { start, end } = utcBounds(r);
   const [row] = await q(
     `SELECT COUNT(*)::int AS n FROM "user" u
-WHERE u."deletedAt" IS NULL AND u."userType"::text = 'investor'
+WHERE u."deletedAt" IS NULL AND u."userType" = 'investor'
   AND u."createdAt" >= ${p.add(start)}::timestamp AND u."createdAt" < ${p.add(end)}::timestamp`,
     p.values,
   );
@@ -65,7 +65,7 @@ export async function ticketsBooked(q: QueryFn, f: Filters, r: DateRange): Promi
     ...productPredicates(f, p),
   ];
   const [row] = await q(
-    `SELECT COUNT(*)::int AS booked, COUNT(*) FILTER (WHERE o.status::text = 'cancelled')::int AS cancelled
+    `SELECT COUNT(*)::int AS booked, COUNT(*) FILTER (WHERE o.status = 'cancelled')::int AS cancelled
 FROM "order" o JOIN products p ON p.id = o."productId" ${investorJoin('o."userId"')}
 WHERE ${preds.join(' AND ')}`,
     p.values,
@@ -80,9 +80,10 @@ export async function periodKpis(
   f: Filters,
   r: DateRange,
   counts?: PeriodKpiCounts | Promise<PeriodKpiCounts>,
+  precomputedSales?: SalesKpis | Promise<SalesKpis>,
 ): Promise<PeriodKpis> {
   if (counts) {
-    const [sales, precomputed] = await Promise.all([salesKpis(q, f, r), counts]);
+    const [sales, precomputed] = await Promise.all([precomputedSales ?? salesKpis(q, f, r), counts]);
     return { ...sales, ...precomputed };
   }
   const [sales, regs, booked] = await Promise.all([salesKpis(q, f, r), registrations(q, r), ticketsBooked(q, f, r)]);
@@ -186,18 +187,18 @@ export async function attention(q: QueryFn, now: Date): Promise<Attention> {
     q(
       `SELECT COUNT(*)::int AS n, COALESCE(SUM(d.amount), 0)::float8 AS amount
 FROM deposits d JOIN "order" o ON o.id = d."orderId" AND o."deletedAt" IS NULL ${investorJoin('o."userId"')}
-WHERE d."deletedAt" IS NULL AND d.status::text = 'pending'`,
+WHERE d."deletedAt" IS NULL AND d.status = 'pending'`,
     ),
     q(
       `SELECT COUNT(*)::int AS n FROM "order" o ${investorJoin('o."userId"')}
-WHERE o."deletedAt" IS NULL AND o.status::text IN ('booked', 'verifying')
+WHERE o."deletedAt" IS NULL AND o.status IN ('booked', 'verifying')
   AND o."createdAt" < $1::timestamp - interval '${STUCK_BOOKING_DAYS} days'`,
       [nowTs],
     ),
     q(
       `SELECT COUNT(*)::int AS n, COALESCE(SUM(r.amount), 0)::float8 AS amount
 FROM returns r JOIN "order" o ON o.id = r."orderId" AND o."deletedAt" IS NULL ${investorJoin('o."userId"')}
-WHERE r."deletedAt" IS NULL AND r.status::text = 'initiated'`,
+WHERE r."deletedAt" IS NULL AND r.status = 'initiated'`,
     ),
     q(
       `WITH sched AS (
@@ -207,7 +208,7 @@ WHERE r."deletedAt" IS NULL AND r.status::text = 'initiated'`,
     COALESCE(s.last_pay, o."investmentDate" + (split_part(p."productDuration"::text, ' ', 1)::int * interval '1 month')) AS maturity
   FROM "order" o JOIN products p ON p.id = o."productId" ${investorJoin('o."userId"')}
   LEFT JOIN sched s ON s."orderId" = o.id
-  WHERE o."deletedAt" IS NULL AND o.status::text = 'invested'
+  WHERE o."deletedAt" IS NULL AND o.status = 'invested'
 )
 SELECT COUNT(*)::int AS n, COALESCE(SUM(total), 0)::float8 AS amount FROM m
 WHERE maturity >= $1::timestamp AND maturity < $1::timestamp + interval '${MATURING_WITHIN_DAYS} days'`,
@@ -273,11 +274,12 @@ export async function loadCommandCenter(
     attention?: Attention | Promise<Attention>;
     currentSales?: Map<string, SalesBucketValue> | Promise<Map<string, SalesBucketValue>>;
     currentPeriodCounts?: PeriodKpiCounts | Promise<PeriodKpiCounts>;
+    currentSalesKpis?: SalesKpis | Promise<SalesKpis>;
   },
 ): Promise<CommandCenterData> {
   const { q, getTarget } = deps;
   const [current, previous, trend, att, target] = await Promise.all([
-    periodKpis(q, f, f.range, snapshot?.currentPeriodCounts),
+    periodKpis(q, f, f.range, snapshot?.currentPeriodCounts, snapshot?.currentSalesKpis),
     f.compareRange ? periodKpis(q, f, f.compareRange) : Promise.resolve(null),
     salesSeries(q, f, snapshot?.currentSales),
     snapshot?.attention ?? attention(q, now),
