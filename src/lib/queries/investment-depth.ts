@@ -24,7 +24,7 @@ const num = (value: unknown): number => Number(value ?? 0);
 const str = (value: unknown): string => String(value ?? '');
 const INVESTMENT_ORDERS = `"order" o
   ${investorJoin('o."userId"')}
-  WHERE o."deletedAt" IS NULL AND o.status::text IN ('invested', 'closed')`;
+  WHERE o."deletedAt" IS NULL AND o.status IN ('invested', 'closed')`;
 
 export interface InvestmentDepthBucketRow {
   key: InvestmentDepthBucketKey;
@@ -115,7 +115,7 @@ export async function listInvestmentDepth(
 ), ltv AS (
   SELECT o."userId", SUM(d.amount) AS ltv
   FROM deposits d JOIN "order" o ON o.id = d."orderId" AND o."deletedAt" IS NULL
-  WHERE d."deletedAt" IS NULL AND d.status::text = 'approved' AND o.status::text IN ('invested', 'closed')
+  WHERE d."deletedAt" IS NULL AND d.status = 'approved' AND o.status IN ('invested', 'closed')
   GROUP BY o."userId"
 ), preferred_tenure AS (
   SELECT DISTINCT ON (o."userId")
@@ -124,7 +124,7 @@ export async function listInvestmentDepth(
   FROM deposits d
   JOIN "order" o ON o.id = d."orderId" AND o."deletedAt" IS NULL
   JOIN products p ON p.id = o."productId"
-  WHERE d."deletedAt" IS NULL AND d.status::text = 'approved' AND o.status::text IN ('invested', 'closed') AND p."productDuration" IS NOT NULL
+  WHERE d."deletedAt" IS NULL AND d.status = 'approved' AND o.status IN ('invested', 'closed') AND p."productDuration" IS NOT NULL
   GROUP BY o."userId", split_part(p."productDuration"::text, ' ', 1)::int
   ORDER BY o."userId", SUM(d.amount) DESC, split_part(p."productDuration"::text, ' ', 1)::int ASC
 )

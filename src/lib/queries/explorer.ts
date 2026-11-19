@@ -4,7 +4,7 @@ import { parseFilters, type Filters, type Segment } from '@/lib/filters/schema';
 import { dhakaTs } from '@/lib/time';
 import { DEFAULT_THRESHOLDS, WEALTH_TIER_DEFS, WEALTH_TIER_KEYS, type WealthTierKey } from './investors';
 import { Params, pgTs, productPredicates, utcBounds, type QueryFn } from './sql-filters';
-import { perInvestorCte, segmentCase } from './segment-sql';
+import { segmentCase } from './segment-sql';
 
 export type ExplorerTable = 'deposits' | 'orders' | 'payouts' | 'maturities' | 'investors';
 export const EXPLORER_TABLES: ExplorerTable[] = ['deposits', 'orders', 'payouts', 'maturities', 'investors'];
@@ -64,23 +64,23 @@ interface TableDef {
   defaultSort: string;
 }
 
-const INVESTOR_JOIN = `JOIN "user" u ON u.id = o."userId" AND u."deletedAt" IS NULL AND u."userType"::text = 'investor'`;
+const INVESTOR_JOIN = `JOIN "user" u ON u.id = o."userId" AND u."deletedAt" IS NULL AND u."userType" = 'investor'`;
 const ORDER_JOIN = `JOIN "order" o ON o.id = X."orderId" AND o."deletedAt" IS NULL`;
-const investorFirstDepJoin = `LEFT JOIN (SELECT o2."userId" AS user_id, MIN(d2."date") AS first_dep FROM deposits d2 JOIN "order" o2 ON o2.id = d2."orderId" WHERE d2."deletedAt" IS NULL AND o2."deletedAt" IS NULL AND d2.status::text = 'approved' GROUP BY o2."userId") fd ON fd.user_id = u.id`;
+const investorFirstDepJoin = `LEFT JOIN (SELECT o2."userId" AS user_id, MIN(d2."date") AS first_dep FROM deposits d2 JOIN "order" o2 ON o2.id = d2."orderId" WHERE d2."deletedAt" IS NULL AND o2."deletedAt" IS NULL AND d2.status = 'approved' GROUP BY o2."userId") fd ON fd.user_id = u.id`;
 const ltvSql = 'COALESCE(inv_ltv.lifetime, 0)::float8';
 const investorLtvJoin = `LEFT JOIN (
   SELECT io."userId" AS user_id,
     COALESCE(SUM(d.amount), 0)::float8 AS lifetime
   FROM deposits d
   JOIN "order" io ON io.id = d."orderId" AND io."deletedAt" IS NULL
-  WHERE d."deletedAt" IS NULL AND d.status::text = 'approved' AND io.status::text IN ('invested', 'closed')
+  WHERE d."deletedAt" IS NULL AND d.status = 'approved' AND io.status IN ('invested', 'closed')
   GROUP BY io."userId"
 ) inv_ltv ON inv_ltv.user_id = u.id`;
 const investorExtraColumnsJoin = `LEFT JOIN (
   SELECT io."userId" AS user_id,
     COUNT(*)::int AS investments
   FROM "order" io
-  WHERE io."deletedAt" IS NULL AND io.status::text IN ('invested', 'closed')
+  WHERE io."deletedAt" IS NULL AND io.status IN ('invested', 'closed')
   GROUP BY io."userId"
 ) inv_ord ON inv_ord.user_id = u.id
 LEFT JOIN (
@@ -90,22 +90,29 @@ LEFT JOIN (
   FROM deposits d_ten
   JOIN "order" o_ten ON o_ten.id = d_ten."orderId" AND o_ten."deletedAt" IS NULL
   JOIN products p_ten ON p_ten.id = o_ten."productId"
-  WHERE d_ten."deletedAt" IS NULL AND d_ten.status::text = 'approved' AND o_ten.status::text IN ('invested', 'closed') AND p_ten."productDuration" IS NOT NULL
+  WHERE d_ten."deletedAt" IS NULL AND d_ten.status = 'approved' AND o_ten.status IN ('invested', 'closed') AND p_ten."productDuration" IS NOT NULL
   GROUP BY o_ten."userId", split_part(p_ten."productDuration"::text, ' ', 1)::int
   ORDER BY o_ten."userId", SUM(d_ten.amount) DESC, split_part(p_ten."productDuration"::text, ' ', 1)::int ASC
 ) inv_ten ON inv_ten.user_id = u.id`;
 const day = (col: string) => `to_char(${dhakaTs(col)}, 'YYYY-MM-DD')`;
 const maturityExpr = `COALESCE(sched.last_pay, COALESCE(o."investmentDate", o."createdAt") + (split_part(p."productDuration"::text, ' ', 1)::int * interval '1 month'))`;
 const WHO = (key: string, sql: string, label: string): Col => ({ key, label, kind: 'text', sql });
+const investorSegment = `COALESCE(sg.seg, 'prospect')`;
 const investorSegmentJoin = (nowTs: string, recent: string, cooling: string) => `LEFT JOIN (
   WITH sched AS (
     SELECT "orderId", MAX("paymentDate") AS last_pay FROM return_schedules WHERE "deletedAt" IS NULL GROUP BY 1
   ), ord AS (
-    SELECT o."userId", o.status::text AS status,
+    SELECT o."userId", o.status,
       COALESCE(s.last_pay, COALESCE(o."investmentDate", o."createdAt") + (split_part(p."productDuration"::text, ' ', 1)::int * interval '1 month')) AS maturity
     FROM "order" o JOIN products p ON p.id = o."productId" LEFT JOIN sched s ON s."orderId" = o.id
-    WHERE o."deletedAt" IS NULL AND o.status::text IN ('invested','closed')
-  ), ${perInvestorCte(nowTs)}
+    WHERE o."deletedAt" IS NULL AND o.status IN ('invested','closed')
+  ), per AS (
+    SELECT ord."userId" AS user_id,
+      BOOL_OR(ord.status = 'invested') AS has_active,
+      MAX(ord.maturity) FILTER (WHERE ord.status = 'closed') AS last_maturity
+    FROM ord
+    GROUP BY ord."userId"
+  )
   SELECT per.user_id, ${segmentCase(nowTs, recent, cooling)} AS seg
   FROM per
 ) sg ON sg.user_id = u.id`;
@@ -175,7 +182,7 @@ const TABLES: Record<ExplorerTable, TableDef> = {
   maturities: {
     from: `"order" o
 JOIN products p ON p.id = o."productId"
-JOIN "user" u ON u.id = o."userId" AND u."deletedAt" IS NULL AND u."userType"::text = 'investor'
+JOIN "user" u ON u.id = o."userId" AND u."deletedAt" IS NULL AND u."userType" = 'investor'
 LEFT JOIN (
   SELECT "orderId", MAX("paymentDate") AS last_pay
   FROM return_schedules
@@ -194,7 +201,7 @@ LEFT JOIN (
   WHERE "deletedAt" IS NULL
   GROUP BY 1
 ) ret ON ret."orderId" = o.id`,
-    where: [`o."deletedAt" IS NULL`, `o.status::text IN ('invested', 'closed')`],
+    where: [`o."deletedAt" IS NULL`, `o.status IN ('invested', 'closed')`],
     dateCol: maturityExpr,
     statusCol: `COALESCE(ret.return_status, 'not_initiated')`,
     statuses: ['completed', 'initiated', 'not_initiated'],
@@ -214,7 +221,7 @@ LEFT JOIN (
   },
   investors: {
     from: '"user" u',
-    where: [`u."deletedAt" IS NULL`, `u."userType"::text = 'investor'`],
+    where: [`u."deletedAt" IS NULL`, `u."userType" = 'investor'`],
     dateCol: 'u."createdAt"',
     statusCol: null,
     statuses: [],
@@ -244,8 +251,8 @@ LEFT JOIN (
         kind: 'int',
         sql: 'inv_ten.preferred_tenure',
       },
-      WHO('active', "CASE WHEN sg.seg = 'active' THEN 'Yes' ELSE 'No' END", 'Active'),
-      WHO('segment', 'sg.seg', 'Segment'),
+      WHO('active', `CASE WHEN ${investorSegment} = 'active' THEN 'Yes' ELSE 'No' END`, 'Active'),
+      WHO('segment', investorSegment, 'Segment'),
     ],
   },
 };
@@ -319,7 +326,7 @@ function build(params: ExplorerParams, now: Date) {
   const startTs = allRegistrations ? '' : `${p.add(start)}::timestamp`;
   const endTs = `${p.add(end)}::timestamp`;
   const dateConds = params.table === 'investors' && hasInvestorKind && !allRegistrations
-    ? [`EXISTS (SELECT 1 FROM deposits d_range JOIN "order" o_range ON o_range.id = d_range."orderId" AND o_range."deletedAt" IS NULL WHERE o_range."userId" = u.id AND d_range."deletedAt" IS NULL AND d_range.status::text = 'approved' AND d_range."date" >= ${startTs} AND d_range."date" < ${endTs})`]
+    ? [`EXISTS (SELECT 1 FROM deposits d_range JOIN "order" o_range ON o_range.id = d_range."orderId" AND o_range."deletedAt" IS NULL WHERE o_range."userId" = u.id AND d_range."deletedAt" IS NULL AND d_range.status = 'approved' AND d_range."date" >= ${startTs} AND d_range."date" < ${endTs})`]
     : allRegistrations
       ? [`(u."createdAt" IS NULL OR u."createdAt" < ${endTs})`]
     : [`${def.dateCol} >= ${startTs}`, `${def.dateCol} < ${endTs}`];
@@ -347,12 +354,12 @@ function build(params: ExplorerParams, now: Date) {
   } else if (prodPreds.length) {
     conds.push(`EXISTS (
       SELECT 1 FROM "order" o JOIN products p ON p.id = o."productId"
-      WHERE o."userId" = u.id AND o."deletedAt" IS NULL AND o.status::text IN ('invested', 'closed')
+      WHERE o."userId" = u.id AND o."deletedAt" IS NULL AND o.status IN ('invested', 'closed')
         AND ${prodPreds.join(' AND ')}
     )`);
   }
   if (params.segments.length) {
-    conds.push(`sg.seg = ANY(${p.add(params.segments)}::text[])`);
+    conds.push(`${investorSegment} = ANY(${p.add(params.segments)}::text[])`);
   }
   const select = [...def.columns.map((c) => `${c.sql} AS "${c.key}"`), `${params.table === 'investors' ? 'u.id' : 'u.id'} AS "userId"`].join(',\n  ');
   const order = `"${params.sort}" ${params.dir === 'asc' ? 'ASC' : 'DESC'} NULLS LAST, "id" DESC`;
@@ -370,12 +377,14 @@ function cells(def: TableDef, r: Record<string, unknown>): Record<string, CellVa
 
 export async function loadExplorer(q: QueryFn, params: ExplorerParams, now: Date = new Date()): Promise<ExplorerResult> {
   const b = build(params, now);
-  const [countRow] = await q(`SELECT COUNT(*)::int AS n FROM ${b.countFrom}\nWHERE ${b.where}`, b.p.values);
   const offset = (params.page - 1) * PAGE_SIZE;
-  const rows = await q(
-    `SELECT ${b.select}\nFROM ${b.from}\nWHERE ${b.where}\nORDER BY ${b.order}\nLIMIT ${PAGE_SIZE} OFFSET ${offset}`,
-    b.p.values,
-  );
+  const [[countRow], rows] = await Promise.all([
+    q(`SELECT COUNT(*)::int AS n FROM ${b.countFrom}\nWHERE ${b.where}`, b.p.values),
+    q(
+      `SELECT ${b.select}\nFROM ${b.from}\nWHERE ${b.where}\nORDER BY ${b.order}\nLIMIT ${PAGE_SIZE} OFFSET ${offset}`,
+      b.p.values,
+    ),
+  ]);
   return {
     table: params.table,
     columns: b.def.columns.map(({ key, label, kind }) => ({ key, label, kind })),
